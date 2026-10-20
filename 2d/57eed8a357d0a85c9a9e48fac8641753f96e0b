@@ -1,0 +1,29 @@
+AltStore.xcodeproj/project.pbxproj
+  s_b00fb297887585::t_4dfbf7ecd1dc97 10,856,2518,3490
+"AltServer/Anisette Data/AnisetteDataManager.swift"
+  s_b00fb297887585::t_ae4f991832e2bd 62-67,69-77,79-80,110-124
+"AltServer/Anisette Data/AnisetteError.swift"
+  s_b00fb297887585::t_916cf788241ae0 20-22,36-47,58-60,64-66,88-97
+"AltServer/Anisette Data/RemoteAnisetteDataFetcher.swift"
+  s_b00fb297887585::t_1472a9a239f643 1-99,101-296,298-607
+  s_b00fb297887585::t_4dabb680bb824f 100,297
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "2d57eed8a357d0a85c9a9e48fac8641753f96e0b",
+  "prompts": {},
+  "logical_commit_id": "2d677b9abd2d5cb22c050e6c13f36eeaefd76c9f",
+  "sessions": {
+    "s_b00fb297887585": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15762-1236-7990-8c6f-c3beba3826f4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": null,
+      "total_additions": 42,
+      "total_deletions": 42
+    }
+  }
+}
