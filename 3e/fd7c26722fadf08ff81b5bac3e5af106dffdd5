@@ -1,0 +1,15 @@
+AltStore/Settings/RemoteAltServerView.swift
+  h_cde38561a364e5 16,37-54,72-86,88-93,96,127,142,179-182,184,224-226,241-247,281-296,306-333,345-347
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "3efd7c26722fadf08ff81b5bac3e5af106dffdd5",
+  "prompts": {},
+  "logical_commit_id": "3efd7c26722fadf08ff81b5bac3e5af106dffdd5",
+  "humans": {
+    "h_cde38561a364e5": {
+      "author": "liuzhe1117 <liuzhe1117@gmail.com>"
+    }
+  }
+}
