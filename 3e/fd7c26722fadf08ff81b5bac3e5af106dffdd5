@@ -1,5 +1,9 @@
 AltStore/Settings/RemoteAltServerView.swift
   h_cde38561a364e5 16,37-54,72-86,88-93,96,127,142,179-182,184,224-226,241-247,281-296,306-333,345-347
+AltServer/AppDelegate.swift
+  s_b00fb297887585::t_bc5303c9371cbf 63,74-75,76,84-86
+"AltServer/Anisette Data/AnisetteDataManager.swift"
+  s_b00fb297887585::t_bc5303c9371cbf 78,90,92-93,134
 ---
 {
   "schema_version": "authorship/3.0.0",
@@ -10,6 +14,17 @@ AltStore/Settings/RemoteAltServerView.swift
   "humans": {
     "h_cde38561a364e5": {
       "author": "liuzhe1117 <liuzhe1117@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_b00fb297887585": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15762-1236-7990-8c6f-c3beba3826f4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "刘哲 <liuzhe@bigo.sg>",
+      "total_additions": 26
     }
   }
 }

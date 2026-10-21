@@ -1,0 +1,20 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "22f766d2edb47626a082a1f775649bcf3fc43aff",
+  "prompts": {},
+  "logical_commit_id": "22969d0ab811821f66fb0a34aa3b4f99b34de7d5",
+  "sessions": {
+    "s_b00fb297887585": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15762-1236-7990-8c6f-c3beba3826f4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "刘哲 <liuzhe@bigo.sg>",
+      "total_additions": 10,
+      "total_deletions": 7
+    }
+  }
+}

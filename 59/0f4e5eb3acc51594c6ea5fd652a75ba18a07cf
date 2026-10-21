@@ -1,13 +1,20 @@
 "AltServer/Anisette Data/AnisetteDataManager.swift"
   h_cde38561a364e5 49-53,67-68,71-81,83-84,90-93,118-139
+  s_b00fb297887585::t_ae4f991832e2bd 71-76,79-81,83-84,118-123,129-132,135-139
+  s_b00fb297887585::t_8d8b3188a74fae 126-128
 "AltServer/Anisette Data/AnisetteError.swift"
   h_cde38561a364e5 20-22,36-47,58-60,64-66,88-97
+  s_b00fb297887585::t_916cf788241ae0 20-22,36-47,58-60,64-66,88-97
 "AltServer/Anisette Data/RemoteAnisetteDataFetcher.swift"
   h_cde38561a364e5 1-610
+  s_b00fb297887585::t_4dabb680bb824f 100,297
+  s_b00fb297887585::t_1472a9a239f643 1-99,101-118,122-125,129-131,135-192,194-296,298-340,342,346-508,511-515,517-526,528-529,531-543,545-610
+  s_b00fb297887585::t_6c095041c4170f 126-128,132-134
 AltServer/AppDelegate.swift
   h_cde38561a364e5 63-86
 AltStore.xcodeproj/project.pbxproj
   h_cde38561a364e5 10,856,2518,3488
+  s_b00fb297887585::t_4dfbf7ecd1dc97 10,856,2518,3488
 ---
 {
   "schema_version": "authorship/3.0.0",
@@ -18,6 +25,17 @@ AltStore.xcodeproj/project.pbxproj
   "humans": {
     "h_cde38561a364e5": {
       "author": "liuzhe1117 <liuzhe1117@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_b00fb297887585": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15762-1236-7990-8c6f-c3beba3826f4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": null,
+      "total_additions": 5
     }
   }
 }
