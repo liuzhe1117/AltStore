@@ -46,6 +46,11 @@ private extension ALTAnisetteData
 class AnisetteDataManager: NSObject
 {
     static let shared = AnisetteDataManager()
+
+    // The User-Agent belongs to the same provider identity as the Anisette
+    // headers. AltStore needs it when it performs GrandSlam authentication on
+    // the device, so expose it alongside the server response.
+    private(set) var authenticationUserAgent: String?
     
     private var anisetteDataCompletionHandlers: [String: (Result<ALTAnisetteData, Error>) -> Void] = [:]
     private var anisetteDataTimers: [String: Timer] = [:]
@@ -59,21 +64,33 @@ class AnisetteDataManager: NSObject
     
     func requestAnisetteData(_ completion: @escaping (Result<ALTAnisetteData, Error>) -> Void)
     {
+        // Keep the original AOSKit/Mail path below macOS 27. Only replace the
+        // macOS 27+ AnisetteKit path with the remote v3 provider.
         if #available(macOS 27, *)
         {
-            // macOS 27 no longer provides anisette data, so generate it locally with AnisetteKit.
-            self.requestAnisetteDataLocally { (result) in
-                if case .failure(let error) = result
+            // The remote provider is selected by RemoteAnisetteDataFetcher. It
+            // accepts both current Mac and Windows v3 services.
+            Task {
+                do
                 {
-                    let underlyingError = error.underlyingError ?? error
-                    Logger.main.error("Failed to generate anisette data locally. \(underlyingError.localizedDescription, privacy: .public)")
+                    let anisetteData = try await RemoteAnisetteDataFetcher.shared.fetchAnisetteData()
+                    self.authenticationUserAgent = anisetteData.userAgent
+                    ALTAppleAPI.shared.authenticationUserAgent = anisetteData.userAgent
+                    completion(.success(anisetteData.makeAnisetteData()))
                 }
-                
-                completion(result)
+                catch
+                {
+                    Logger.main.error("Failed to fetch remote anisette data. \(error.localizedDescription, privacy: .public)")
+                    completion(.failure(error))
+                }
             }
         }
         else
         {
+            // Avoid carrying a remote provider's User-Agent into native AOSKit/Mail requests.
+            self.authenticationUserAgent = nil
+            ALTAppleAPI.shared.authenticationUserAgent = nil
+
             self.requestAnisetteDataFromAOSKit { (result) in
                 do
                 {
@@ -98,6 +115,28 @@ class AnisetteDataManager: NSObject
                         }
                     }
                 }
+            }
+        }
+    }
+
+    func resyncAnisetteData(sim: String, completion: @escaping (Result<ALTAnisetteData, Error>) -> Void)
+    {
+        guard #available(macOS 27, *) else {
+            completion(.failure(AnisetteError.remoteServerUnavailable(debugDescription: "Remote anisette resynchronization requires macOS 27 or later.")))
+            return
+        }
+
+        Task {
+            do
+            {
+                let anisetteData = try await RemoteAnisetteDataFetcher.shared.resync(sim: sim)
+                self.authenticationUserAgent = anisetteData.userAgent
+                ALTAppleAPI.shared.authenticationUserAgent = anisetteData.userAgent
+                completion(.success(anisetteData.makeAnisetteData()))
+            }
+            catch
+            {
+                completion(.failure(error))
             }
         }
     }

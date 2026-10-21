@@ -60,6 +60,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         ServerConnectionManager.shared.start()
         ALTDeviceManager.shared.start()
+
+        if #available(macOS 27, *)
+        {
+            // These callbacks belong to the remote provider used on macOS 27+.
+            ALTAppleAPI.shared.anisetteDataRefreshHandler = { (completionHandler) in
+                AnisetteDataManager.shared.requestAnisetteData { result in
+                    switch result
+                    {
+                    case .failure(let error): completionHandler(nil, error)
+                    case .success(let anisetteData): completionHandler(anisetteData, nil)
+                    }
+                }
+            }
+
+            ALTAppleAPI.shared.anisetteDataResyncHandler = { (sim, completionHandler) in
+                AnisetteDataManager.shared.resyncAnisetteData(sim: sim) { result in
+                    switch result
+                    {
+                    case .failure(let error): completionHandler(nil, error)
+                    case .success(let anisetteData): completionHandler(anisetteData, nil)
+                    }
+                }
+            }
+        }
         
         #if STAGING
         SUUpdater.shared().feedURL = URL(string: "https://altstore.io/altserver/sparkle-macos-staging.xml")
