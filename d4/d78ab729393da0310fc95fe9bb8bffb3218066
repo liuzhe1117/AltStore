@@ -1,0 +1,29 @@
+AltServer/Connections/RequestHandler.swift
+  h_cde38561a364e5 11,29,34-35,38-46
+AltStore/Anisette/AnisetteServer.swift
+  h_cde38561a364e5 17-37
+AltStore/Anisette/AnisetteServerManager.swift
+  h_cde38561a364e5 22-38,64-65,67,71-72,76,102
+AltStore/Operations/AuthenticationOperation.swift
+  h_cde38561a364e5 212-217,396-398,403-445
+AltStore/Operations/FetchAnisetteDataOperation.swift
+  h_cde38561a364e5 50-77,94-195,214,228,231-235,238-242,253,276-277,290,292-304,306-315,326-328,331-332,334-335,338,344,354,362-385,387,389-393,404-408,416-420,422-423,427-431,433-434,451,468-472
+AltStore/Server/ServerManager.swift
+  h_cde38561a364e5 183-198,204,207,212
+AltStoreCore/Components/Keychain.swift
+  h_cde38561a364e5 91-96,99-101
+"Shared/Server Protocol/ServerProtocol.swift"
+  h_cde38561a364e5 237-240,242,244,254,261,264,267,275,297
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "d4d78ab729393da0310fc95fe9bb8bffb3218066",
+  "prompts": {},
+  "logical_commit_id": "d4d78ab729393da0310fc95fe9bb8bffb3218066",
+  "humans": {
+    "h_cde38561a364e5": {
+      "author": "liuzhe1117 <liuzhe1117@gmail.com>"
+    }
+  }
+}
