@@ -19,9 +19,11 @@ class AnisetteServerManager
 {
     static let shared = AnisetteServerManager()
 
-    // PR #1835's Windows providers lead both the UI directory and automatic
-    // selection. Keep the CDN's other providers available for manual selection.
-    static let windowsServers = [
+    // Prefer the Mac providers currently used first by iLoader, then keep
+    // PR #1835's Windows providers as fallbacks.
+    static let preferredServers = [
+        AnisetteServer(name: "SideStore (Mac ADI)", url: URL(string: "https://new.ani.sidestore.io")!),
+        AnisetteServer(name: "jkcoxson (Mac ADI)", url: URL(string: "https://mac-ani.jkcoxson.com")!),
         AnisetteServer(name: "jkcoxson (Windows ADI)", url: URL(string: "https://ani.jkcoxson.com")!),
         AnisetteServer(name: "StikStore (Windows ADI)", url: URL(string: "https://ani2.stikstore.app")!),
     ]
@@ -29,7 +31,7 @@ class AnisetteServerManager
     static func prioritizedServers(_ servers: [AnisetteServer]) -> [AnisetteServer]
     {
         var seen = Set<URL>()
-        return (windowsServers + servers).filter { seen.insert($0.url).inserted }
+        return (preferredServers + servers).filter { seen.insert($0.url).inserted }
     }
 
     var cachedServers: [AnisetteServer] {

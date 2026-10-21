@@ -123,14 +123,13 @@ actor RemoteAnisetteDataFetcher
 {
     static let shared = RemoteAnisetteDataFetcher()
 
-    // Windows ADI is the identity currently confirmed by AltSign's working fix.
-    // Keep Mac providers as fallbacks because iLoader exposes both kinds and
-    // the server list can change as Apple's validation changes.
+    // Follow iLoader's current order: Mac providers first, then the Windows
+    // providers from PR #1835 as fallbacks.
     private static let defaultServerURLs: [URL] = [
-        URL(string: "https://ani.jkcoxson.com")!,
-        URL(string: "https://ani2.stikstore.app")!,
         URL(string: "https://new.ani.sidestore.io")!,
         URL(string: "https://mac-ani.jkcoxson.com")!,
+        URL(string: "https://ani.jkcoxson.com")!,
+        URL(string: "https://ani2.stikstore.app")!,
         URL(string: "https://ani3.stikstore.app")!,
     ]
 

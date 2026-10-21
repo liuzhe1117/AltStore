@@ -299,7 +299,8 @@ private extension FetchAnisetteDataOperation
             return try await self.fetchAnisetteData(from: serverURL, resyncData: resyncData)
         }
 
-        // Try the selected provider first, then PR #1835's Windows providers.
+        // Try the selected provider first, then the iLoader Mac providers and
+        // PR #1835's Windows providers in that order.
         var attemptedURLs = Set<URL>()
         if let preferredURL = UserDefaults.shared.preferredAnisetteServerURL
         {
@@ -328,7 +329,8 @@ private extension FetchAnisetteDataOperation
             servers = AnisetteServerManager.shared.cachedServers
         }
 
-        // Randomize the remaining directory entries, keeping Windows defaults first.
+        // Randomize the remaining directory entries, keeping the preferred
+        // iLoader providers first.
         for server in AnisetteServerManager.prioritizedServers(servers.shuffled())
         {
             guard attemptedURLs.insert(server.url).inserted else { continue }
