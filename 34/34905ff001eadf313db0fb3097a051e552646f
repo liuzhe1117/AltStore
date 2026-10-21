@@ -1,0 +1,26 @@
+AltStore/Operations/FetchAnisetteDataOperation.swift
+  s_b00fb297887585::t_6576d4bab03418 302-303,332-333
+AltStore/Anisette/AnisetteServerManager.swift
+  s_b00fb297887585::t_6576d4bab03418 22-26,34
+"AltServer/Anisette Data/RemoteAnisetteDataFetcher.swift"
+  s_b00fb297887585::t_6576d4bab03418 126-127,131-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "3434905ff001eadf313db0fb3097a051e552646f",
+  "prompts": {},
+  "logical_commit_id": "3434905ff001eadf313db0fb3097a051e552646f",
+  "sessions": {
+    "s_b00fb297887585": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15762-1236-7990-8c6f-c3beba3826f4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuzhe1117 <liuzhe1117@gmail.com>",
+      "total_additions": 1226,
+      "total_deletions": 183
+    }
+  }
+}
