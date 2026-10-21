@@ -1,0 +1,19 @@
+AltStore/Operations/AuthenticationOperation.swift
+  h_cde38561a364e5 441-450,453-454
+AltStore/Operations/FetchAnisetteDataOperation.swift
+  h_cde38561a364e5 23-26,54-56,194-195,197,213,247,251,263,272,276-277,294,306-308,311-312
+AltStoreCore/Components/Keychain.swift
+  h_cde38561a364e5 91-93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "1a94d3ac249ccbdbcd73d9e407862cd38e0822e8",
+  "prompts": {},
+  "logical_commit_id": "1a94d3ac249ccbdbcd73d9e407862cd38e0822e8",
+  "humans": {
+    "h_cde38561a364e5": {
+      "author": "liuzhe1117 <liuzhe1117@gmail.com>"
+    }
+  }
+}
