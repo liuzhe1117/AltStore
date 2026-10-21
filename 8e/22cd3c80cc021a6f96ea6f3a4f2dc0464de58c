@@ -1,0 +1,22 @@
+docs/releases/2026-10-21-mac-anisette.en.md
+  s_b00fb297887585::t_5fa7913a207812 1-125
+docs/releases/2026-10-21-mac-anisette.md
+  s_b00fb297887585::t_08fa4405c8cb6a 3-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "8e22cd3c80cc021a6f96ea6f3a4f2dc0464de58c",
+  "prompts": {},
+  "logical_commit_id": "8e22cd3c80cc021a6f96ea6f3a4f2dc0464de58c",
+  "sessions": {
+    "s_b00fb297887585": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15762-1236-7990-8c6f-c3beba3826f4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuzhe1117 <liuzhe1117@gmail.com>"
+    }
+  }
+}
