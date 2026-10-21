@@ -454,8 +454,16 @@ private extension DatabaseManager
     
     func migrateDatabaseToAppGroupIfNeeded(completion: @escaping (Result<Void, Error>) -> Void)
     {
-        // Only migrate if we haven't migrated yet and there's a valid AltStore app group.
-        guard UserDefaults.shared.requiresAppGroupMigration && Bundle.main.altstoreAppGroup != nil else { return completion(.success(())) }
+        // The Info.plist declares the group for all builds, including builds
+        // signed with a profile that does not contain the App Group entitlement.
+        // In that case containerURL(...) is nil and the app intentionally uses
+        // its private Application Support directory. Do not run the App Group
+        // migration against that fallback directory: NSFileCoordinator treats
+        // the directory replacement as an invalid file operation on iOS.
+        guard UserDefaults.shared.requiresAppGroupMigration,
+              Bundle.main.altstoreAppGroup != nil,
+              FileManager.default.altstoreSharedDirectory != nil
+        else { return completion(.success(())) }
 
         func finish(_ result: Result<Void, Error>)
         {
