@@ -1,0 +1,23 @@
+"AltServer/Anisette Data/AnisetteDataManager.swift"
+  h_cde38561a364e5 49-53,67-68,71-81,83-84,90-93,118-139
+"AltServer/Anisette Data/AnisetteError.swift"
+  h_cde38561a364e5 20-22,36-47,58-60,64-66,88-97
+"AltServer/Anisette Data/RemoteAnisetteDataFetcher.swift"
+  h_cde38561a364e5 1-610
+AltServer/AppDelegate.swift
+  h_cde38561a364e5 63-86
+AltStore.xcodeproj/project.pbxproj
+  h_cde38561a364e5 10,856,2518,3488
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "590f4e5eb3acc51594c6ea5fd652a75ba18a07cf",
+  "prompts": {},
+  "logical_commit_id": "590f4e5eb3acc51594c6ea5fd652a75ba18a07cf",
+  "humans": {
+    "h_cde38561a364e5": {
+      "author": "liuzhe1117 <liuzhe1117@gmail.com>"
+    }
+  }
+}
