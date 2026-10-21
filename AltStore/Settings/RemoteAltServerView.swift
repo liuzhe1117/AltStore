@@ -13,7 +13,7 @@ import AltStoreCore
 struct RemoteAltServerView: View
 {
     @State
-    private var availableServers: [AnisetteServer]? = UserDefaults.shared.anisetteServers
+    private var availableServers: [AnisetteServer]? = AnisetteServerManager.shared.cachedServers
     
     @State
     private var isLoading = true
@@ -32,6 +32,24 @@ struct RemoteAltServerView: View
     
     @State
     private var isConnected = false
+
+    @State
+    private var clientInfo: AnisetteClientInfo?
+
+    @State
+    private var clientInfoURL: URL?
+
+    @State
+    private var isLoadingClientInfo = false
+
+    @State
+    private var clientInfoError: String?
+
+    @State
+    private var clientInfoRequestID = UUID()
+
+    @State
+    private var isSelectingServer = false
 
     @State
     private var isShowingClearConfirmation = false
@@ -53,8 +71,29 @@ struct RemoteAltServerView: View
                             .accessibilityHidden(true)
                     }
                 }
+
+                if isConnected, let preferredURL
+                {
+                    LabeledContent("Anisette Server", value: preferredURL.host ?? preferredURL.absoluteString)
+
+                    if clientInfoURL == preferredURL, let clientInfo
+                    {
+                        LabeledContent("Device", value: clientInfo.deviceType ?? String(localized: "Unknown"))
+                        LabeledContent("Platform", value: clientInfo.operatingSystem ?? String(localized: "Unknown"))
+                    }
+                    else if isLoadingClientInfo
+                    {
+                        ProgressView("Loading server details…")
+                    }
+                    else if let clientInfoError
+                    {
+                        Text(clientInfoError)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             } footer: {
-                Text(isConnected ? "The remote AltServer is ready to sideload apps." : "Turn on Wi-Fi and LocalDevVPN to connect.")
+                Text(isConnected ? "The device connection is ready." : "Turn on Wi-Fi and LocalDevVPN to connect.")
             }
             .listSectionSpacing(10) // Visually differentiates sections of different types.
             
@@ -85,6 +124,7 @@ struct RemoteAltServerView: View
                             .contentShape(.rect) // Expand tap target to the full row.
                         }
                         .buttonStyle(.plain)
+                        .disabled(isSelectingServer)
                     }
                 }
             }
@@ -99,6 +139,7 @@ struct RemoteAltServerView: View
             Section("Custom") {
                 HStack {
                     TextField("https://", text: $customURLText)
+                        .disabled(isSelectingServer)
                         .textContentType(.URL)
                         .keyboardType(.URL)
                         .autocorrectionDisabled()
@@ -135,8 +176,12 @@ struct RemoteAltServerView: View
         .navigationTitle(localizedTitle)
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadServers() }
-        .refreshable { await loadServers() }
+        .refreshable {
+            await loadServers()
+            await loadClientInfo()
+        }
         .task { await monitorConnection() }
+        .task(id: isConnected ? preferredURL : nil) { await loadClientInfo() }
         .alert("Couldn't select server", isPresented: $isShowingError) {
             SwiftUI.Button("OK", role: .cancel) { }
         } message: { Text(errorMessage) }
@@ -176,7 +221,9 @@ private extension RemoteAltServerView
     // Pings the server, then makes it the preferred server. Leaves selection unchanged if it's unreachable.
     func selectServer(url: URL) async
     {
-        guard url != preferredURL else { return }
+        guard url != preferredURL, !isSelectingServer else { return }
+        isSelectingServer = true
+        defer { isSelectingServer = false }
 
         do
         {
@@ -191,6 +238,13 @@ private extension RemoteAltServerView
 
         UserDefaults.shared.preferredAnisetteServerURL = url
         preferredURL = url
+
+        // An adi.pb is provider-specific. Force the next request to provision
+        // against the newly selected server.
+        Keychain.shared.anisetteADIPB = nil
+        Keychain.shared.anisetteADIPBServerURL = nil
+        Keychain.shared.anisetteProvisioningClientInfo = nil
+        Keychain.shared.anisetteProvisioningUserAgent = nil
 
         // Clear the custom field when selecting a known server.
         if availableServers?.contains(where: { $0.url == url }) == true
@@ -224,6 +278,22 @@ private extension RemoteAltServerView
         while true
         {
             isConnected = await OnDeviceClient.isReachable()
+
+            // Automatic fallback can change the saved provider while this view
+            // is visible. Update both the checkmark and the identity details.
+            let storedURL = UserDefaults.shared.preferredAnisetteServerURL
+            if preferredURL != storedURL
+            {
+                preferredURL = storedURL
+                if let storedURL, availableServers?.contains(where: { $0.url == storedURL }) != true
+                {
+                    customURLText = storedURL.absoluteString
+                }
+                else
+                {
+                    customURLText = ""
+                }
+            }
             
             do
             {
@@ -235,6 +305,34 @@ private extension RemoteAltServerView
             }
         }
     }
+
+    func loadClientInfo() async
+    {
+        let requestID = UUID()
+        clientInfoRequestID = requestID
+        clientInfo = nil
+        clientInfoURL = nil
+        clientInfoError = nil
+        isLoadingClientInfo = false
+        guard isConnected, let url = preferredURL else { return }
+
+        isLoadingClientInfo = true
+        defer {
+            if clientInfoRequestID == requestID { isLoadingClientInfo = false }
+        }
+        do
+        {
+            let info = try await AnisetteServerManager.shared.validate(url)
+            guard !Task.isCancelled, clientInfoRequestID == requestID, isConnected, preferredURL == url else { return }
+            clientInfo = info
+            clientInfoURL = url
+        }
+        catch
+        {
+            guard !Task.isCancelled, clientInfoRequestID == requestID, isConnected, preferredURL == url else { return }
+            clientInfoError = error.localizedDescription
+        }
+    }
     
     func clearRemoteAltServer()
     {
@@ -244,6 +342,9 @@ private extension RemoteAltServerView
         
         UserDefaults.shared.preferredAnisetteServerURL = nil
         Keychain.shared.anisetteADIPB = nil
+        Keychain.shared.anisetteADIPBServerURL = nil
+        Keychain.shared.anisetteProvisioningClientInfo = nil
+        Keychain.shared.anisetteProvisioningUserAgent = nil
         
         dismiss() // Return to Settings
     }
