@@ -234,9 +234,14 @@ public struct AnisetteDataRequest: ServerMessageProtocol
 {
     public var version = 1
     public var identifier = "AnisetteDataRequest"
+
+    // When present, asks AltServer to resynchronize its Anisette provider with
+    // Apple's X-Apple-I-MD-DATA value from an hsc 434 response.
+    public var resyncData: String?
     
-    public init()
+    public init(resyncData: String? = nil)
     {
+        self.resyncData = resyncData
     }
 }
 
@@ -246,17 +251,20 @@ public struct AnisetteDataResponse: ServerMessageProtocol
     public var identifier = "AnisetteDataResponse"
     
     public var anisetteData: ALTAnisetteData
+    public var userAgent: String?
     
     private enum CodingKeys: String, CodingKey
     {
         case identifier
         case version
         case anisetteData
+        case userAgent
     }
 
-    public init(anisetteData: ALTAnisetteData)
+    public init(anisetteData: ALTAnisetteData, userAgent: String? = nil)
     {
         self.anisetteData = anisetteData
+        self.userAgent = userAgent
     }
     
     public init(from decoder: Decoder) throws
@@ -264,6 +272,7 @@ public struct AnisetteDataResponse: ServerMessageProtocol
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.version = try container.decode(Int.self, forKey: .version)
         self.identifier = try container.decode(String.self, forKey: .identifier)
+        self.userAgent = try container.decodeIfPresent(String.self, forKey: .userAgent)
         
         let json = try container.decode([String: String].self, forKey: .anisetteData)
         
@@ -285,6 +294,7 @@ public struct AnisetteDataResponse: ServerMessageProtocol
         
         let json = self.anisetteData.json()
         try container.encode(json, forKey: .anisetteData)
+        try container.encodeIfPresent(self.userAgent, forKey: .userAgent)
     }
 }
 

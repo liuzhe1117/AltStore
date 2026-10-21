@@ -88,8 +88,17 @@ public class Keychain
     @KeychainItem(key: "anisetteADIPB", synchronizable: false)
     public var anisetteADIPB: Data?
 
+    // The provisioning blob is issued by a specific Anisette provider. Keep
+    // its origin next to the blob so switching providers cannot reuse stale
+    // credentials.
+    @KeychainItem(key: "anisetteADIPBServerURL", synchronizable: false)
+    public var anisetteADIPBServerURL: String?
+
     @KeychainItem(key: "anisetteProvisioningClientInfo", synchronizable: false)
     public var anisetteProvisioningClientInfo: String?
+
+    @KeychainItem(key: "anisetteProvisioningUserAgent", synchronizable: false)
+    public var anisetteProvisioningUserAgent: String?
 
     @KeychainItem(key: "devicePairingFile", synchronizable: false)
     public var devicePairingFile: Data?

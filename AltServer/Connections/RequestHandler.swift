@@ -8,6 +8,7 @@
 
 import Foundation
 import OSLog
+import AltSign
 
 typealias ServerConnectionManager = ConnectionManager<ServerRequestHandler>
 
@@ -25,14 +26,24 @@ struct ServerRequestHandler: RequestHandler
 {
     func handleAnisetteDataRequest(_ request: AnisetteDataRequest, for connection: Connection, completionHandler: @escaping (Result<AnisetteDataResponse, Error>) -> Void)
     {
-        AnisetteDataManager.shared.requestAnisetteData { (result) in
+        let completion: (Result<ALTAnisetteData, Error>) -> Void = { result in
             switch result
             {
             case .failure(let error): completionHandler(.failure(error))
             case .success(let anisetteData):
-                let response = AnisetteDataResponse(anisetteData: anisetteData)
+                let response = AnisetteDataResponse(anisetteData: anisetteData,
+                                                    userAgent: AnisetteDataManager.shared.authenticationUserAgent)
                 completionHandler(.success(response))
             }
+        }
+
+        if let resyncData = request.resyncData
+        {
+            AnisetteDataManager.shared.resyncAnisetteData(sim: resyncData, completion: completion)
+        }
+        else
+        {
+            AnisetteDataManager.shared.requestAnisetteData(completion)
         }
     }
     

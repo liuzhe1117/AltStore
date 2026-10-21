@@ -209,6 +209,12 @@ class AuthenticationOperation: ResultOperation<(ALTTeam, ALTCertificate, ALTAppl
     override func finish(_ result: Result<(ALTTeam, ALTCertificate, ALTAppleAPISession), Error>)
     {
         guard !self.isFinished else { return }
+
+        // These handlers are only valid for this authentication context. Do
+        // not retain a completed operation through the process-wide AltSign
+        // singleton.
+        ALTAppleAPI.shared.anisetteDataRefreshHandler = nil
+        ALTAppleAPI.shared.anisetteDataResyncHandler = nil
         
         switch result
         {
@@ -387,11 +393,56 @@ private extension AuthenticationOperation
         self.appleIDEmailAddress = appleID
         
         let fetchAnisetteDataOperation = FetchAnisetteDataOperation(context: self.context)
-        fetchAnisetteDataOperation.resultHandler = { (result) in
+        fetchAnisetteDataOperation.resultHandler = { [weak fetchAnisetteDataOperation] (result) in
+            guard let fetchAnisetteDataOperation else { return }
+            fetchAnisetteDataOperation.resultHandler = nil
             switch result
             {
             case .failure(let error): completionHandler(.failure(error))
             case .success(let anisetteData):
+                do { try fetchAnisetteDataOperation.pinAuthenticationIdentity(anisetteData) }
+                catch { return completionHandler(.failure(error)) }
+                // AltSign's v3 fix requires the User-Agent that belongs to the
+                // Anisette provider. These handlers also keep the one-time
+                // password fresh after 2FA and recover from hsc 434.
+                ALTAppleAPI.shared.anisetteDataRefreshHandler = { [weak self] completionHandler in
+                    guard self != nil else {
+                        completionHandler(nil, OperationError.cancelled)
+                        return
+                    }
+
+                    Task {
+                        do
+                        {
+                            let anisetteData = try await fetchAnisetteDataOperation.fetchAuthenticationAnisetteData()
+                            completionHandler(anisetteData, nil)
+                        }
+                        catch
+                        {
+                            completionHandler(nil, error)
+                        }
+                    }
+                }
+
+                ALTAppleAPI.shared.anisetteDataResyncHandler = { [weak self] sim, completionHandler in
+                    guard self != nil else {
+                        completionHandler(nil, OperationError.cancelled)
+                        return
+                    }
+
+                    Task {
+                        do
+                        {
+                            let anisetteData = try await fetchAnisetteDataOperation.fetchAuthenticationAnisetteData(resyncData: sim)
+                            completionHandler(anisetteData, nil)
+                        }
+                        catch
+                        {
+                            completionHandler(nil, error)
+                        }
+                    }
+                }
+
                 let verificationHandler: ((@escaping (String?) -> Void) -> Void)?
                 
                 if let presentingViewController = self.presentingViewController
@@ -438,20 +489,8 @@ private extension AuthenticationOperation
                     verificationHandler = nil
                 }
                     
-                // Resynchronize anisette data when Apple says it's out of sync (hsc 434).
-                ALTAppleAPI.shared.anisetteDataResyncHandler = { (sim, completionHandler) in
-                    let fetchAnisetteDataOperation = FetchAnisetteDataOperation(context: self.context)
-                    fetchAnisetteDataOperation.sim = sim
-                    fetchAnisetteDataOperation.resultHandler = { (result) in
-                        completionHandler(result.value, result.error)
-                    }
-                    self.operationQueue.addOperation(fetchAnisetteDataOperation)
-                }
-
                 ALTAppleAPI.shared.authenticate(appleID: appleID, password: password, anisetteData: anisetteData,
                                                 verificationHandler: verificationHandler) { (account, session, error) in
-                    ALTAppleAPI.shared.anisetteDataResyncHandler = nil
-
                     if let account = account, let session = session
                     {
                         completionHandler(.success((account, session)))

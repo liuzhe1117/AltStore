@@ -180,20 +180,36 @@ private extension ServerManager
             serverName = NSLocalizedString("AltServer", comment: "")
         }
         
+        // A connection can become ready, then fail or be cancelled after its
+        // request completes. These are lifecycle events, not new connect results.
+        let completionLock = NSLock()
+        var didComplete = false
+        func finish(_ result: Result<Connection, Error>)
+        {
+            completionLock.lock()
+            guard !didComplete else {
+                completionLock.unlock()
+                return
+            }
+            didComplete = true
+            completionLock.unlock()
+            completion(result)
+        }
+
         connection.stateUpdateHandler = { [unowned connection] (state) in
             switch state
             {
             case .failed(let error):
                 Logger.sideload.error("Failed to connect to \(serverName, privacy: .public). \(error.localizedDescription, privacy: .public)")
-                completion(.failure(OperationError.connectionFailed))
+                finish(.failure(OperationError.connectionFailed))
                 
             case .cancelled:
-                completion(.failure(OperationError.cancelled))
+                finish(.failure(OperationError.cancelled))
                 
             case .ready:
                 Logger.sideload.notice("Connected to \(serverName, privacy: .public)!")
                 let connection = NetworkConnection(connection)
-                completion(.success(connection))
+                finish(.success(connection))
                 
             case .waiting: break
             case .setup: break

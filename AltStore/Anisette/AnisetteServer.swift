@@ -14,6 +14,27 @@ struct AnisetteServer: Decodable
     var url: URL
 }
 
+struct AnisetteClientInfo: Decodable
+{
+    var clientInfo: String
+    var userAgent: String
+
+    // client_info is formatted as <device> <platform;version;build> <client>.
+    private var components: [String] {
+        clientInfo.split(separator: "<").compactMap { component in
+            guard let end = component.firstIndex(of: ">") else { return nil }
+            return String(component[..<end])
+        }
+    }
+
+    var deviceType: String? { components.first }
+
+    var operatingSystem: String? {
+        guard components.count > 1 else { return nil }
+        return components[1].split(separator: ";").first.map(String.init)
+    }
+}
+
 extension AnisetteServer: Identifiable
 {
     var id: URL { self.url }

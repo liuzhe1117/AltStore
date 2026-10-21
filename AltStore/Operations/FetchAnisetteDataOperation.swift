@@ -20,10 +20,6 @@ private extension URL
     static let appleGSALookup = URL(string: "https://gsa.apple.com/grandslam/GsService2/lookup")!
 }
 
-// Apple only accepts anisette data generated with Windows' ADI (iTunes), so try servers that provide it first.
-private let windowsAnisetteServers = [AnisetteServer(name: "jkcoxson", url: URL(string: "https://ani.jkcoxson.com")!),
-                                      AnisetteServer(name: "StikStore", url: URL(string: "https://ani2.stikstore.app")!)]
-
 extension FetchAnisetteDataOperation
 {
     fileprivate struct AnisetteIdentity
@@ -51,9 +47,34 @@ extension FetchAnisetteDataOperation
 class FetchAnisetteDataOperation: ResultOperation<ALTAnisetteData>, @unchecked Sendable
 {
     let context: OperationContext
-    
-    // X-Apple-I-MD-DATA Apple returned with hsc 434, used to resynchronize remote anisette data.
-    var sim: String?
+
+    private struct AuthenticationProvider
+    {
+        let url: URL
+        let identityBytes: Data
+        let adiPB: Data
+        let clientInfo: String
+        let userAgent: String
+    }
+
+    private enum AuthenticationRoute
+    {
+        case remote(AuthenticationProvider)
+        case desktop(Server)
+    }
+
+    private struct AuthenticationBinding
+    {
+        let route: AuthenticationRoute
+        let clientInfo: String
+        let userAgent: String
+        let deviceID: String
+        let localUserID: String
+    }
+
+    private var lastRoute: AuthenticationRoute?
+    private var lastUserAgent: String?
+    private var authenticationBinding: AuthenticationBinding?
     
     private let session: URLSession
     
@@ -70,6 +91,108 @@ class FetchAnisetteDataOperation: ResultOperation<ALTAnisetteData>, @unchecked S
         }
         
         self.session = URLSession(configuration: configuration)
+    }
+
+    // Fetches fresh Anisette data using the route selected for this operation.
+    // This is also used by AltSign after a two-factor challenge, when the
+    // one-time password must be refreshed before the next GrandSlam request.
+    func fetchAnisetteData() async throws -> ALTAnisetteData
+    {
+        let anisetteData: ALTAnisetteData
+        if UserDefaults.shared.prefersRemoteAltServer
+        {
+            anisetteData = try await self.fetchAnisetteDataFromAvailableServer()
+        }
+        else if let server = self.context.server
+        {
+            anisetteData = try await self.fetchAnisetteData(fromAltServer: server)
+            self.lastRoute = .desktop(server)
+        }
+        else
+        {
+            throw OperationError.serverNotFound
+        }
+        return self.normalizedAnisetteData(anisetteData)
+    }
+
+    // Called once after initial selection. Subsequent authentication steps use
+    // this operation's immutable snapshot, never the current UI or keychain.
+    func pinAuthenticationIdentity(_ anisetteData: ALTAnisetteData) throws
+    {
+        guard self.authenticationBinding == nil, let route = self.lastRoute else
+        {
+            throw self.authenticationIdentityChanged()
+        }
+        self.authenticationBinding = AuthenticationBinding(route: route,
+            clientInfo: anisetteData.deviceDescription,
+            userAgent: self.lastUserAgent ?? "akd/1.0 CFNetwork/808.1.4",
+            deviceID: anisetteData.deviceUniqueIdentifier,
+            localUserID: anisetteData.localUserID)
+    }
+
+    func fetchAuthenticationAnisetteData(resyncData: String? = nil) async throws -> ALTAnisetteData
+    {
+        guard let binding = self.authenticationBinding else { throw self.authenticationIdentityChanged() }
+        let anisetteData: ALTAnisetteData
+        switch binding.route
+        {
+        case .remote(let provider):
+            anisetteData = try await self.fetchAnisetteData(from: provider.url, resyncData: resyncData, authenticationProvider: provider)
+        case .desktop(let server):
+            anisetteData = try await self.fetchAnisetteData(fromAltServer: server, resyncData: resyncData)
+        }
+        let normalized = self.normalizedAnisetteData(anisetteData)
+        guard normalized.deviceDescription == binding.clientInfo,
+              normalized.deviceUniqueIdentifier == binding.deviceID,
+              normalized.localUserID == binding.localUserID,
+              (self.lastUserAgent ?? "akd/1.0 CFNetwork/808.1.4") == binding.userAgent
+        else { throw self.authenticationIdentityChanged() }
+        return normalized
+    }
+
+    private func authenticationIdentityChanged() -> NSError
+    {
+        NSError(domain: "AltStore.AnisetteAuthenticationError", code: 1, userInfo: [
+            NSLocalizedDescriptionKey: NSLocalizedString("The Anisette identity changed during authentication.", comment: ""),
+            NSLocalizedRecoverySuggestionErrorKey: NSLocalizedString("Start a new sign-in. This authentication attempt cannot switch Anisette servers or device identities.", comment: ""),
+        ])
+    }
+
+    func resynchronizeAnisetteData(sim: String) async throws -> ALTAnisetteData
+    {
+        let anisetteData: ALTAnisetteData
+        if UserDefaults.shared.prefersRemoteAltServer
+        {
+            anisetteData = try await self.fetchAnisetteDataFromAvailableServer(resyncData: sim)
+        }
+        else if let server = self.context.server
+        {
+            anisetteData = try await self.fetchAnisetteData(fromAltServer: server, resyncData: sim)
+        }
+        else
+        {
+            throw OperationError.serverNotFound
+        }
+        return self.normalizedAnisetteData(anisetteData)
+    }
+
+    private func normalizedAnisetteData(_ anisetteData: ALTAnisetteData) -> ALTAnisetteData
+    {
+        let regex = Regex {
+            "com.apple.dt.Xcode/"
+            OneOrMore {
+                ChoiceOf {
+                    .digit
+                    "."
+                }
+            }
+        }
+        .ignoresCase()
+
+        // Apply the same identity normalization to initial, refresh and resync
+        // requests, including calls made after this Operation has finished.
+        anisetteData.deviceDescription = anisetteData.deviceDescription.replacing(regex, with: "com.apple.akd/1.0")
+        return anisetteData
     }
     
     override func main()
@@ -88,41 +211,8 @@ class FetchAnisetteDataOperation: ResultOperation<ALTAnisetteData>, @unchecked S
             {
                 Logger.sideload.notice("Fetching anisette data...")
 
-                let anisetteData: ALTAnisetteData
-
-                // Use Remote AltServer when set up and preferred.
-                if UserDefaults.shared.prefersRemoteAltServer
-                {
-                    // AltServerless route
-                    anisetteData = try await self.fetchAnisetteDataFromAvailableServer()
-                }
-                else if let server = self.context.server
-                {
-                    anisetteData = try await self.fetchAnisetteData(fromAltServer: server)
-                }
-                else
-                {
-                    throw OperationError.serverNotFound
-                }
+                let anisetteData = try await self.fetchAnisetteData()
                 
-                let regex = Regex {
-                    "com.apple.dt.Xcode/"
-                    OneOrMore {
-                        ChoiceOf {
-                            .digit
-                            "."
-                        }
-                    }
-                }
-                .ignoresCase()
-                
-                if anisetteData.deviceDescription.contains(regex)
-                {
-                    // Replace legacy Xcode identifier (which Apple's servers now reject) with akd's.
-                    let sanitizedDescription = anisetteData.deviceDescription.replacing(regex, with: "com.apple.akd/1.0")
-                    anisetteData.deviceDescription = sanitizedDescription
-                }
-
                 self.finish(.success(anisetteData))
             }
             catch
@@ -135,14 +225,21 @@ class FetchAnisetteDataOperation: ResultOperation<ALTAnisetteData>, @unchecked S
 
 private extension FetchAnisetteDataOperation
 {
-    func fetchAnisetteData(fromAltServer server: Server) async throws -> ALTAnisetteData
+    func fetchAnisetteData(fromAltServer server: Server, resyncData: String? = nil) async throws -> ALTAnisetteData
     {
         return try await withCheckedThrowingContinuation { continuation in
-            // Existing bug causes completion to be called twice, so add a guard to prevent continuation assertion
+            // Each fetch/refresh/resync owns a continuation, independently of
+            // this Operation's lifetime. Consume it atomically before resuming:
+            // connect, send and receive callbacks may fail concurrently.
+            let continuationLock = NSLock()
+            var pendingContinuation: CheckedContinuation<ALTAnisetteData, Error>? = continuation
             func finish(_ result: Result<ALTAnisetteData, Error>)
             {
-                guard !self.isFinished else { return }
-                continuation.resume(with: result)
+                continuationLock.lock()
+                let continuation = pendingContinuation
+                pendingContinuation = nil
+                continuationLock.unlock()
+                continuation?.resume(with: result)
             }
             
             ServerManager.shared.connect(to: server) { (result) in
@@ -153,7 +250,7 @@ private extension FetchAnisetteDataOperation
                 case .success(let connection):
                     Logger.sideload.debug("Sending anisette data request...")
 
-                    let request = AnisetteDataRequest()
+                    let request = AnisetteDataRequest(resyncData: resyncData)
                     connection.send(request) { (result) in
                         switch result
                         {
@@ -176,6 +273,8 @@ private extension FetchAnisetteDataOperation
 
                                 case .success(.anisetteData(let response)):
                                     Logger.sideload.notice("Successfully received anisette data!")
+                                    self.lastUserAgent = response.userAgent
+                                    ALTAppleAPI.shared.authenticationUserAgent = response.userAgent
                                     finish(.success(response.anisetteData))
 
                                 case .success: finish(.failure(ALTServerError(.unknownResponse)))
@@ -188,16 +287,34 @@ private extension FetchAnisetteDataOperation
         }
     }
     
-    func fetchAnisetteDataFromAvailableServer() async throws -> ALTAnisetteData
+    func fetchAnisetteDataFromAvailableServer(resyncData: String? = nil) async throws -> ALTAnisetteData
     {
-        // Use preferred URL if it exists.
-        if let preferredURL = UserDefaults.shared.preferredAnisetteServerURL,
-           let anisetteData = try? await self.fetchAnisetteData(from: preferredURL)
+        // Apple's resync challenge belongs to the already provisioned identity.
+        // Never send it to a fallback provider or provision a new identity for it.
+        if resyncData != nil
         {
-            return anisetteData
+            guard let storedURL = Keychain.shared.anisetteADIPBServerURL,
+                  let serverURL = URL(string: storedURL)
+            else { throw AnisetteServerError.invalidResponse(serverURL: nil, debugDescription: "No provisioned Anisette identity is available for resynchronization. Sign in again.") }
+            return try await self.fetchAnisetteData(from: serverURL, resyncData: resyncData)
         }
 
-        // No preferred URL — fetch the list of available servers.
+        // Try the selected provider first, then PR #1835's Windows providers.
+        var attemptedURLs = Set<URL>()
+        if let preferredURL = UserDefaults.shared.preferredAnisetteServerURL
+        {
+            attemptedURLs.insert(preferredURL)
+            do
+            {
+                return try await self.fetchAnisetteData(from: preferredURL)
+            }
+            catch
+            {
+                if Task.isCancelled { throw CancellationError() }
+                Logger.sideload.error("Preferred anisette server failed: \(error.localizedDescription, privacy: .public). Trying alternatives.")
+            }
+        }
+
         let servers: [AnisetteServer]
         do
         {
@@ -206,20 +323,25 @@ private extension FetchAnisetteDataOperation
         catch
         {
             Logger.sideload.error("Failed to fetch remote anisette server list: \(error.localizedDescription, privacy: .public)")
-            throw AnisetteServerError.unavailable()
+            if Task.isCancelled { throw CancellationError() }
+            // A CDN outage must not prevent trying bundled or cached providers.
+            servers = AnisetteServerManager.shared.cachedServers
         }
 
-        // Shuffle and try each server. If successful, set preferred URL.
-        for server in windowsAnisetteServers + servers.shuffled()
+        // Randomize the remaining directory entries, keeping Windows defaults first.
+        for server in AnisetteServerManager.prioritizedServers(servers.shuffled())
         {
+            guard attemptedURLs.insert(server.url).inserted else { continue }
+            try Task.checkCancellation()
             do
             {
-                let anisetteData = try await self.fetchAnisetteData(from: server.url)
+                let anisetteData = try await self.fetchAnisetteData(from: server.url, resyncData: resyncData)
                 UserDefaults.shared.preferredAnisetteServerURL = server.url
                 return anisetteData
             }
             catch
             {
+                if Task.isCancelled { throw CancellationError() }
                 Logger.sideload.error("Anisette server \(server.name, privacy: .public) failed: \(error.localizedDescription, privacy: .public). Trying next.")
             }
         }
@@ -229,38 +351,61 @@ private extension FetchAnisetteDataOperation
     }
     
     // Based on SideStore's FetchAnisetteDataOperation: https://github.com/SideStore/SideStore/blob/develop/AltStore/Operations/FetchAnisetteDataOperation.swift
-    func fetchAnisetteData(from serverURL: URL) async throws -> ALTAnisetteData
+    private func fetchAnisetteData(from serverURL: URL, resyncData: String? = nil, authenticationProvider: AuthenticationProvider? = nil) async throws -> ALTAnisetteData
     {
         // 1. Fetch client_info from the server
         let clientInfoURL = serverURL.appending(components: "v3", "client_info")
         
-        struct Response: Decodable
-        {
-            var clientInfo: String
-            var userAgent: String
-        }
-        
         let decoder = Foundation.JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         
-        let response: Response = try await self.send(URLRequest(url: clientInfoURL), decoder: decoder, anisetteServerURL: serverURL)
-        guard response.clientInfo.contains("<Windows;") else { throw AnisetteServerError.invalidServer() }
+        let clientInfoRequest = URLRequest(url: clientInfoURL, cachePolicy: .reloadIgnoringLocalCacheData)
+        let response: AnisetteClientInfo = try await self.send(clientInfoRequest, decoder: decoder, anisetteServerURL: serverURL)
 
-        // 2. Load or generate the persisted device identity (16 random bytes -> derives identifier, localUserID, deviceID)
+        // A provider may change its backend at the same URL. Fail before
+        // provisioning or sending the old identity to a different client.
+        if let provider = authenticationProvider,
+           provider.url != serverURL || provider.clientInfo != response.clientInfo || provider.userAgent != response.userAgent
+        {
+            throw self.authenticationIdentityChanged()
+        }
+
+        // Bind both the device identity and provisioning blob to the provider's
+        // URL AND advertised identity. A backend can change at the same URL.
+        let cachedIdentity = Keychain.shared.anisetteIdentityKey
+        let cachedADIPB = Keychain.shared.anisetteADIPB
+        let canReuseProvisioning = cachedIdentity?.count == 16 && cachedADIPB != nil &&
+            Keychain.shared.anisetteADIPBServerURL == serverURL.absoluteString &&
+            Keychain.shared.anisetteProvisioningClientInfo == response.clientInfo &&
+            Keychain.shared.anisetteProvisioningUserAgent == response.userAgent
+
+        guard authenticationProvider != nil || resyncData == nil || canReuseProvisioning else
+        {
+            throw AnisetteServerError.invalidResponse(serverURL: serverURL, debugDescription: "The Anisette provider identity changed. Sign in again before resynchronizing.")
+        }
+
+        // 2. Rotate the identifier whenever a new provisioning identity is needed.
         let identity: AnisetteIdentity
-        if let id = Keychain.shared.anisetteIdentityKey, Keychain.shared.anisetteADIPB != nil, Keychain.shared.anisetteProvisioningClientInfo == response.clientInfo
+        if let provider = authenticationProvider
+        {
+            identity = AnisetteIdentity(bytes: provider.identityBytes)
+        }
+        else if canReuseProvisioning, let id = cachedIdentity
         {
             identity = AnisetteIdentity(bytes: id)
         }
         else
         {
             identity = AnisetteIdentity.make()
-            Keychain.shared.anisetteIdentityKey = identity.bytes
         }
 
         // 3. Provision against this server if we don't have a cached adi.pb
         let adiPB: Data
-        if let pb = Keychain.shared.anisetteADIPB, Keychain.shared.anisetteProvisioningClientInfo == response.clientInfo
+        if let provider = authenticationProvider
+        {
+            adiPB = provider.adiPB
+        }
+        else if canReuseProvisioning, let pb = cachedADIPB
         {
             adiPB = pb
         }
@@ -268,13 +413,25 @@ private extension FetchAnisetteDataOperation
         {
             Logger.sideload.notice("No cached adi.pb; running anisette provisioning against \(serverURL.absoluteString, privacy: .public).")
             adiPB = try await self.provision(against: serverURL, clientInfo: response.clientInfo, userAgent: response.userAgent, identity: identity)
-            Keychain.shared.anisetteADIPB = adiPB
+            // Preserve the previous identity if provisioning fails. Write the
+            // blob last so partially saved metadata is never considered valid.
+            Keychain.shared.anisetteADIPB = nil
+            Keychain.shared.anisetteIdentityKey = identity.bytes
+            Keychain.shared.anisetteADIPBServerURL = serverURL.absoluteString
             Keychain.shared.anisetteProvisioningClientInfo = response.clientInfo
+            Keychain.shared.anisetteProvisioningUserAgent = response.userAgent
+            Keychain.shared.anisetteADIPB = adiPB
         }
         
         // 4. Fetch anisette headers
-        let (machineID, oneTimePassword, routingInfo) = try await self.fetchHeaders(from: serverURL, identity: identity, adiPB: adiPB, sim: self.sim)
+        let (machineID, oneTimePassword, routingInfo) = try await self.fetchHeaders(from: serverURL, identity: identity, adiPB: adiPB, resyncData: resyncData)
+
+        // The User-Agent is part of the provider identity. AltSign uses it for
+        // GrandSlam authentication, so do not discard it after provisioning.
+        self.lastUserAgent = response.userAgent
         ALTAppleAPI.shared.authenticationUserAgent = response.userAgent
+        self.lastRoute = .remote(AuthenticationProvider(url: serverURL, identityBytes: identity.bytes,
+            adiPB: adiPB, clientInfo: response.clientInfo, userAgent: response.userAgent))
 
         // 5. Construct & return ALTAnisetteData
         return ALTAnisetteData(
@@ -291,7 +448,7 @@ private extension FetchAnisetteDataOperation
         )
     }
 
-    func fetchHeaders(from serverURL: URL, identity: AnisetteIdentity, adiPB: Data, sim: String?) async throws -> (machineID: String, oneTimePassword: String, routingInfo: UInt64)
+    func fetchHeaders(from serverURL: URL, identity: AnisetteIdentity, adiPB: Data, resyncData: String? = nil) async throws -> (machineID: String, oneTimePassword: String, routingInfo: UInt64)
     {
         let headersURL = serverURL.appending(components: "v3", "get_headers")
 
@@ -308,8 +465,11 @@ private extension FetchAnisetteDataOperation
             var md_lu: String?
         }
 
-        let body = Body(identifier: identity.identifier, adi_pb: String(decoding: adiPB, as: UTF8.self),
-                        sim: sim, device_id: sim.map { _ in identity.deviceID }, md_lu: sim.map { _ in identity.localUserID })
+        let body = Body(identifier: identity.identifier,
+                        adi_pb: String(decoding: adiPB, as: UTF8.self),
+                        sim: resyncData,
+                        device_id: resyncData.map { _ in identity.deviceID },
+                        md_lu: resyncData.map { _ in identity.localUserID })
         request.httpBody = try JSONEncoder().encode(body)
 
         struct Response: Decodable

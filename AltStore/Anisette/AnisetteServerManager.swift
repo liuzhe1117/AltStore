@@ -19,6 +19,23 @@ class AnisetteServerManager
 {
     static let shared = AnisetteServerManager()
 
+    // PR #1835's Windows providers lead both the UI directory and automatic
+    // selection. Keep the CDN's other providers available for manual selection.
+    static let windowsServers = [
+        AnisetteServer(name: "jkcoxson (Windows ADI)", url: URL(string: "https://ani.jkcoxson.com")!),
+        AnisetteServer(name: "StikStore (Windows ADI)", url: URL(string: "https://ani2.stikstore.app")!),
+    ]
+
+    static func prioritizedServers(_ servers: [AnisetteServer]) -> [AnisetteServer]
+    {
+        var seen = Set<URL>()
+        return (windowsServers + servers).filter { seen.insert($0.url).inserted }
+    }
+
+    var cachedServers: [AnisetteServer] {
+        Self.prioritizedServers(UserDefaults.shared.anisetteServers ?? [])
+    }
+
     private let session: URLSession
 
     private init()
@@ -44,17 +61,19 @@ class AnisetteServerManager
         let (data, _) = try await self.session.data(from: .anisetteServers)
         let response = try Foundation.JSONDecoder().decode(Response.self, from: data)
 
-        UserDefaults.shared.anisetteServers = response.servers
+        let servers = Self.prioritizedServers(response.servers)
+        UserDefaults.shared.anisetteServers = servers
 
-        return response.servers
+        return servers
     }
 
     // Verifies a URL points to a working anisette server.
-    func validate(_ url: URL) async throws
+    @discardableResult
+    func validate(_ url: URL) async throws -> AnisetteClientInfo
     {
         let clientInfoURL = url.appending(components: "v3", "client_info")
 
-        var request = URLRequest(url: clientInfoURL)
+        var request = URLRequest(url: clientInfoURL, cachePolicy: .reloadIgnoringLocalCacheData)
         request.timeoutInterval = 30
 
         let (data, urlResponse) = try await self.session.data(for: request)
@@ -75,18 +94,12 @@ class AnisetteServerManager
             }
         }
 
-        struct Response: Decodable
-        {
-            var clientInfo: String
-            var userAgent: String
-        }
-
         let decoder = Foundation.JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
 
         do
         {
-            _ = try decoder.decode(Response.self, from: data)
+            return try decoder.decode(AnisetteClientInfo.self, from: data)
         }
         catch
         {
