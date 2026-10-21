@@ -1,0 +1,15 @@
+AltStoreCore/Model/DatabaseManager.swift
+  h_cde38561a364e5 457-466
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "4079043f7ae4280190053e0364ed8ce46de075b4",
+  "prompts": {},
+  "logical_commit_id": "4079043f7ae4280190053e0364ed8ce46de075b4",
+  "humans": {
+    "h_cde38561a364e5": {
+      "author": "liuzhe1117 <liuzhe1117@gmail.com>"
+    }
+  }
+}
