@@ -1,5 +1,7 @@
 # AltServer-mac / AltStore-mac-anisette（非官方构建）
 
+[简体中文](2026-10-21-mac-anisette.md) | [English](2026-10-21-mac-anisette.en.md)
+
 这是用于排查、缓解 `-80045` 和 Apple GrandSlam HTTP 503 的社区构建，不是 AltStore 官方发布。包含 macOS 的 AltServer，以及支持手机远程刷新的 AltStore IPA。
 
 ## 下载
