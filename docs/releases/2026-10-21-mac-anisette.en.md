@@ -1,14 +1,14 @@
 # AltServer-mac / AltStore-mac-anisette (Unofficial Build)
 
-[简体中文](2026-10-21-mac-anisette.md) | [English](2026-10-21-mac-anisette.en.md)
+[English](https://github.com/liuzhe1117/AltStore/releases/tag/v1.8-mac-anisette-unofficial-20261021) | [简体中文](https://github.com/liuzhe1117/AltStore/blob/fix/macos15-remote-anisette/docs/releases/2026-10-21-mac-anisette.md)
 
 This community build is intended to investigate and mitigate `-80045` and Apple GrandSlam HTTP 503 errors. It is not an official AltStore release. It includes AltServer for macOS and an AltStore IPA with on-device remote refresh support.
 
 ## Downloads
 
-- **`AltServer-mac.zip`**: Extracts to `AltServer-mac.app`. AltServer 1.8 (98), a Universal build for Apple Silicon and Intel Macs. Ad-hoc signed, not notarized, and not signed with a personal Apple developer certificate.
-- **`AltStore-mac-anisette.ipa`**: AltStore 2.3 (73), built in Release configuration. It contains no personal signing certificate or provisioning profile. AltServer signs it with your Apple ID during installation.
-- **`SHA256SUMS.txt`**: SHA-256 checksums for both packages.
+- **[AltServer-mac.zip](https://github.com/liuzhe1117/AltStore/releases/download/v1.8-mac-anisette-unofficial-20261021/AltServer-mac.zip)**: Extracts to `AltServer-mac.app`. AltServer 1.8 (98), a Universal build for Apple Silicon and Intel Macs. Ad-hoc signed, not notarized, and not signed with a personal Apple developer certificate.
+- **[AltStore-mac-anisette.ipa](https://github.com/liuzhe1117/AltStore/releases/download/v1.8-mac-anisette-unofficial-20261021/AltStore-mac-anisette.ipa)**: AltStore 2.3 (73), built in Release configuration. It contains no personal signing certificate or provisioning profile. AltServer signs it with your Apple ID during installation.
+- **[SHA256SUMS.txt](https://github.com/liuzhe1117/AltStore/releases/download/v1.8-mac-anisette-unofficial-20261021/SHA256SUMS.txt)**: SHA-256 checksums for both packages.
 
 The apps declare minimum versions of macOS 12.0 and iOS 17.4. This round of testing used macOS 15.7.2 and an iPhone 15 running iOS 26.6.1. Intel Macs, other OS versions, and the macOS 27 code path were not tested on hardware in this round.
 

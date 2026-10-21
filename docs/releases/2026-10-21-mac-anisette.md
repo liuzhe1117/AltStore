@@ -1,14 +1,14 @@
 # AltServer-mac / AltStore-mac-anisette（非官方构建）
 
-[简体中文](2026-10-21-mac-anisette.md) | [English](2026-10-21-mac-anisette.en.md)
+[English](https://github.com/liuzhe1117/AltStore/releases/tag/v1.8-mac-anisette-unofficial-20261021) | [简体中文](https://github.com/liuzhe1117/AltStore/blob/fix/macos15-remote-anisette/docs/releases/2026-10-21-mac-anisette.md)
 
 这是用于排查、缓解 `-80045` 和 Apple GrandSlam HTTP 503 的社区构建，不是 AltStore 官方发布。包含 macOS 的 AltServer，以及支持手机远程刷新的 AltStore IPA。
 
 ## 下载
 
-- **`AltServer-mac.zip`**：解压得到 `AltServer-mac.app`。AltServer 1.8（98），Universal：Apple Silicon / Intel，ad-hoc 签名，未公证，无个人开发者证书签名。
-- **`AltStore-mac-anisette.ipa`**：AltStore 2.3（73），Release 构建，无个人证书或 provisioning profile，安装时由 AltServer 使用你的 Apple ID 重新签名。
-- **`SHA256SUMS.txt`**：两个安装包的 SHA-256 校验值。
+- **[AltServer-mac.zip](https://github.com/liuzhe1117/AltStore/releases/download/v1.8-mac-anisette-unofficial-20261021/AltServer-mac.zip)**：解压得到 `AltServer-mac.app`。AltServer 1.8（98），Universal：Apple Silicon / Intel，ad-hoc 签名，未公证，无个人开发者证书签名。
+- **[AltStore-mac-anisette.ipa](https://github.com/liuzhe1117/AltStore/releases/download/v1.8-mac-anisette-unofficial-20261021/AltStore-mac-anisette.ipa)**：AltStore 2.3（73），Release 构建，无个人证书或 provisioning profile，安装时由 AltServer 使用你的 Apple ID 重新签名。
+- **[SHA256SUMS.txt](https://github.com/liuzhe1117/AltStore/releases/download/v1.8-mac-anisette-unofficial-20261021/SHA256SUMS.txt)**：两个安装包的 SHA-256 校验值。
 
 应用声明的最低版本为 macOS 12.0、iOS 17.4。本轮实测环境是 macOS 15.7.2、iPhone 15 / iOS 26.6.1；Intel Mac、其他系统版本及 macOS 27 路径未在本轮真机测试。
 
@@ -42,7 +42,7 @@
 
 ### 1. 安装 AltServer-mac
 
-1. 下载本页的 ZIP、IPA 和校验文件。退出正在运行的其他 AltServer，避免同时运行多个实例。
+1. 从上方下载链接或[本次 Release](https://github.com/liuzhe1117/AltStore/releases/tag/v1.8-mac-anisette-unofficial-20261021) 下载 ZIP、IPA 和校验文件。退出正在运行的其他 AltServer，避免同时运行多个实例。
 2. 解压 `AltServer-mac.zip`，将 `AltServer-mac.app` 移到 `/Applications`。
 3. 如果 macOS 因下载隔离阻止打开，确认下载来源后执行：
 
@@ -53,15 +53,15 @@
 4. 打开该 App，确认菜单栏出现 AltServer 图标。本包使用 ad-hoc 签名、未公证；不要通过其官方自动更新入口覆盖本构建。
 5. 用数据线连接 iPhone，解锁，并在手机或 Finder 出现提示时信任电脑。
 
-### 2. 安装本页附带的 AltStore IPA
+### 2. 安装本次 Release 附带的 AltStore IPA
 
 1. **按住 Option，再点击 AltServer 菜单栏图标**，选择 **Sideload .ipa… → 你的设备**。
-2. 在文件选择框中选取本页下载的 **`AltStore-mac-anisette.ipa`**。
+2. 在文件选择框中选取本次 Release 下载的 **`AltStore-mac-anisette.ipa`**。
 3. 输入自己的 Apple ID 和密码，按提示完成受信任设备的 2FA。SMS 2FA 在相关社区方案中仍有兼容性报告，本构建没有验证其可靠性。
 4. 如 iOS 要求信任开发者，在 **设置 → 通用 → VPN 与设备管理** 中信任自己的开发者身份。
 5. 如 iOS 要求开发者模式，在 **设置 → 隐私与安全性 → 开发者模式** 中开启，重启后确认。然后打开 AltStore。
 
-**不要直接使用普通的 “Install AltStore…” 来安装这份修改版 IPA：该入口按官方配置下载 AltStore，不会自动使用本页附件。** 免费账号仍遵守苹果的应用数量、App ID 数量和 7 天有效期限制。
+**不要直接使用普通的 “Install AltStore…” 来安装这份修改版 IPA：该入口按官方配置下载 AltStore，不会自动使用本次 Release 附件。** 免费账号仍遵守苹果的应用数量、App ID 数量和 7 天有效期限制。
 
 ### 3. 配置手机远程刷新
 
@@ -110,7 +110,7 @@
 shasum -a 256 -c SHA256SUMS.txt
 ```
 
-源码以本 release 标签为准，AltSign 子模块固定为 [`020ddb5691ffb9b75dfdd92b83a6809bbfdd1d5b`](https://github.com/liuzhe1117/AltSign/commit/020ddb5691ffb9b75dfdd92b83a6809bbfdd1d5b)。
+源码以[本次 Release](https://github.com/liuzhe1117/AltStore/releases/tag/v1.8-mac-anisette-unofficial-20261021) 标签为准，AltSign 子模块固定为 [`020ddb5691ffb9b75dfdd92b83a6809bbfdd1d5b`](https://github.com/liuzhe1117/AltSign/commit/020ddb5691ffb9b75dfdd92b83a6809bbfdd1d5b)。
 
 ```sh
 git clone --recurse-submodules --branch v1.8-mac-anisette-unofficial-20261021 https://github.com/liuzhe1117/AltStore.git
