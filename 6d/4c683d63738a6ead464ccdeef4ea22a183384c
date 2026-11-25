@@ -1,0 +1,39 @@
+README.md
+  s_f708d8a6b93240::t_d02b697f52919f 47-48
+"AltStore/Managing Apps/AppManager.swift"
+  s_f708d8a6b93240::t_d02b697f52919f 1340,1347-1348
+AltTests/AltTests.swift
+  s_f708d8a6b93240::t_d02b697f52919f 1299-1349
+AltStore/Operations/VerifyAppOperation.swift
+  s_f708d8a6b93240::t_d02b697f52919f 162,182-183,279-321
+AltStoreCore/Model/InstalledApp.swift
+  s_f708d8a6b93240::t_d02b697f52919f 146-155
+AltStore/Operations/ResignAppOperation.swift
+  s_f708d8a6b93240::t_d02b697f52919f 112,114-115,229-233,235,238-247,249,251,254-255
+docs/WatchCompanionSigning.md
+  s_f708d8a6b93240::t_d02b697f52919f 1-42
+AltServer/Devices/ALTDeviceManager+Installation.swift
+  s_f708d8a6b93240::t_d02b697f52919f 673,677,682,689,727-730,759-765,981,983-984,1057-1061,1063
+AltStore/Operations/FetchProvisioningProfilesOperation.swift
+  s_f708d8a6b93240::t_d02b697f52919f 53,64,68,73,80,210-214,251-257,283,530-531
+Shared/Extensions/ALTApplication+AltStoreApp.swift
+  s_f708d8a6b93240::t_d02b697f52919f 15-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "6d4c683d63738a6ead464ccdeef4ea22a183384c",
+  "prompts": {},
+  "sessions": {
+    "s_f708d8a6b93240": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a210ec-d111-71f0-b703-1d3fff66e581",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuzhe1117 <liuzhe1117@gmail.com>",
+      "total_additions": 232,
+      "total_deletions": 72
+    }
+  }
+}
