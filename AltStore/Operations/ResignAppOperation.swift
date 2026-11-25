@@ -126,16 +126,12 @@ private extension ResignAppOperation
 
             if let appGroups = profile.entitlements[.appGroups] as? [String]
             {
+                infoDictionary = AppGroupInfoPlist.remappingReferences(in: infoDictionary,
+                    originalGroups: application.entitlements[.appGroups] as? [String] ?? [],
+                    authorizedGroups: appGroups, teamIdentifier: profile.teamIdentifier)
                 infoDictionary[Bundle.Info.appGroups] = appGroups
 
-                // To keep file providers working, remap the NSExtensionFileProviderDocumentGroup, if there is one.
-                if var extensionInfo = infoDictionary["NSExtension"] as? [String: Any],
-                    let appGroup = extensionInfo["NSExtensionFileProviderDocumentGroup"] as? String,
-                    let localAppGroup = appGroups.filter({ $0.contains(appGroup) }).min(by: { $0.count < $1.count })
-                {
-                    extensionInfo["NSExtensionFileProviderDocumentGroup"] = localAppGroup
-                    infoDictionary["NSExtension"] = extensionInfo
-                }
+
             }
             
             if let backgroundTaskIDs = infoDictionary[Bundle.Info.backgroundTaskIDs] as? [String]

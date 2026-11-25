@@ -999,6 +999,9 @@ private extension ALTDeviceManager
             
             if let appGroups = profile.entitlements[.appGroups] as? [String]
             {
+                infoDictionary = AppGroupInfoPlist.remappingReferences(in: infoDictionary,
+                    originalGroups: app.entitlements[.appGroups] as? [String] ?? [],
+                    authorizedGroups: appGroups, teamIdentifier: profile.teamIdentifier)
                 infoDictionary[Bundle.Info.appGroups] = appGroups
             }
             
