@@ -1,0 +1,21 @@
+docs/releases/2026-11-25-watch-signing-crash.md
+  s_f708d8a6b93240::t_8e1197e4703f1c 1-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "e1ed10ac5d4a76d9d463592f85fe6d7a0c4ae904",
+  "prompts": {},
+  "logical_commit_id": "e1ed10ac5d4a76d9d463592f85fe6d7a0c4ae904",
+  "sessions": {
+    "s_f708d8a6b93240": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a210ec-d111-71f0-b703-1d3fff66e581",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuzhe1117 <liuzhe1117@gmail.com>",
+      "total_additions": 33
+    }
+  }
+}
