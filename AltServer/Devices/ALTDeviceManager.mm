@@ -27,6 +27,7 @@
 #include <libimobiledevice/afc.h>
 #include <libimobiledevice/misagent.h>
 #include <libimobiledevice/mobile_image_mounter.h>
+#include <libimobiledevice/house_arrest.h>
 
 void ALTDeviceManagerUpdateStatus(plist_t command, plist_t status, void *udid);
 void ALTDeviceManagerUpdateAppDeletionStatus(plist_t command, plist_t status, void *uuid);
@@ -501,6 +502,7 @@ NSNotificationName const ALTDeviceManagerDeviceDidDisconnectNotification = @"ALT
     return YES;
 }
 
+// Converts the file to data so it can be written with writeData.
 - (BOOL)writeFile:(NSURL *)fileURL toDestinationURL:(NSURL *)destinationURL progress:(NSProgress *)progress client:(afc_client_t)afc error:(NSError **)error
 {
     NSFileHandle *fileHandle = [NSFileHandle fileHandleForReadingAtPath:fileURL.path];
@@ -515,21 +517,43 @@ NSNotificationName const ALTDeviceManagerDeviceDidDisconnectNotification = @"ALT
     }
     
     NSData *data = [fileHandle readDataToEndOfFile];
+    
+    NSError *writeError = nil;
+    if ([self writeData:data toDestinationURL:destinationURL client:afc error:&writeError])
+    {
+        return YES;
+    }
+    
+    NSString *afcErrorDomain = writeError.userInfo[ALTUnderlyingErrorDomainErrorKey];
+    NSString *afcErrorCode = writeError.userInfo[ALTUnderlyingErrorCodeErrorKey];
+    if ([afcErrorDomain isEqualToString:@"AFC"] && afcErrorCode.intValue == AFC_E_OBJECT_IS_DIR)
+    {
+        NSLog(@"Treating file as directory: %@ %@", fileURL, destinationURL);
+        return [self writeDirectory:fileURL toDestinationURL:destinationURL client:afc progress:progress error:error];
+    }
+    
+    if (error)
+    {
+        *error = writeError;
+    }
+    
+    return NO;
+}
 
+- (BOOL)writeData:(NSData *)data toDestinationURL:(NSURL *)destinationURL client:(afc_client_t)afc error:(NSError **)error
+{
     uint64_t af = 0;
     
     int openResult = afc_file_open(afc, destinationURL.relativePath.fileSystemRepresentation, AFC_FOPEN_WRONLY, &af);
     if (openResult != AFC_E_SUCCESS || af == 0)
     {
-        if (openResult == AFC_E_OBJECT_IS_DIR)
-        {
-            NSLog(@"Treating file as directory: %@ %@", fileURL, destinationURL);
-            return [self writeDirectory:fileURL toDestinationURL:destinationURL client:afc progress:progress error:error];
-        }
-        
         if (error)
         {
-            *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError userInfo:@{NSURLErrorKey: destinationURL}];
+            *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError userInfo:@{
+                NSURLErrorKey: destinationURL,
+                ALTUnderlyingErrorDomainErrorKey: @"AFC",
+                ALTUnderlyingErrorCodeErrorKey: [@(openResult) description]
+            }];
         }
         
         return NO;
@@ -537,7 +561,7 @@ NSNotificationName const ALTDeviceManagerDeviceDidDisconnectNotification = @"ALT
     
     BOOL success = YES;
     uint32_t bytesWritten = 0;
-        
+    
     while (bytesWritten < data.length)
     {
         uint32_t count = 0;
@@ -547,8 +571,12 @@ NSNotificationName const ALTDeviceManagerDeviceDidDisconnectNotification = @"ALT
         {
             if (error)
             {
-                NSLog(@"Failed writing file with error: %@ (%@ %@)", @(writeResult), fileURL, destinationURL);
-                *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError userInfo:@{NSURLErrorKey: destinationURL}];
+                NSLog(@"Failed writing data with error: %@ (%@)", @(writeResult), destinationURL);
+                *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError userInfo:@{
+                    NSURLErrorKey: destinationURL,
+                    ALTUnderlyingErrorDomainErrorKey: @"AFC",
+                    ALTUnderlyingErrorCodeErrorKey: [@(writeResult) description]
+                }];
             }
             
             success = NO;
@@ -562,7 +590,7 @@ NSNotificationName const ALTDeviceManagerDeviceDidDisconnectNotification = @"ALT
     {
         if (error)
         {
-            NSLog(@"Failed writing file due to mismatched sizes: %@ vs %@ (%@ %@)", @(bytesWritten), @(data.length), fileURL, destinationURL);
+            NSLog(@"Failed writing data due to mismatched sizes: %@ vs %@ (%@)", @(bytesWritten), @(data.length), destinationURL);
             *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError userInfo:@{NSURLErrorKey: destinationURL}];
         }
         
@@ -1413,6 +1441,83 @@ NSNotificationName const ALTDeviceManagerDeviceDidDisconnectNotification = @"ALT
         }
         
         finish(installedApps, nil);
+    });
+}
+
+#pragma mark - App Containers -
+
+- (void)writeData:(NSData *)data toPath:(NSString *)path toDevice:(ALTDevice *)altDevice inContainerForBundleIdentifier:(NSString *)bundleIdentifier
+completionHandler:(void (^)(BOOL, NSError *_Nullable))completionHandler
+{
+    dispatch_async(self.installationQueue, ^{
+        __block idevice_t device = NULL;
+        __block house_arrest_client_t houseArrest = NULL;
+        __block afc_client_t afc = NULL;
+        
+        void (^finish)(NSError *_Nullable) = ^(NSError *error) {
+            // The AFC client borrows the house arrest client's connection, so it has to be freed first.
+            afc_client_free(afc);
+            house_arrest_client_free(houseArrest);
+            idevice_free(device);
+            
+            completionHandler(error == nil, error);
+        };
+        
+        /* Find Device */
+        if (idevice_new_with_options(&device, altDevice.identifier.UTF8String, (enum idevice_options)((int)IDEVICE_LOOKUP_NETWORK | (int)IDEVICE_LOOKUP_USBMUX)) != IDEVICE_E_SUCCESS)
+        {
+            return finish([NSError errorWithDomain:AltServerErrorDomain code:ALTServerErrorDeviceNotFound userInfo:nil]);
+        }
+        
+        /* Connect to House Arrest */
+        // House arrest starts its own lockdown connection internally, so we don't need one here.
+        if (house_arrest_client_start_service(device, &houseArrest, "altserver") != HOUSE_ARREST_E_SUCCESS)
+        {
+            return finish([NSError errorWithDomain:AltServerErrorDomain code:ALTServerErrorConnectionFailed userInfo:nil]);
+        }
+        
+        /* Vend App Container */
+        if (house_arrest_send_command(houseArrest, "VendContainer", bundleIdentifier.UTF8String) != HOUSE_ARREST_E_SUCCESS)
+        {
+            return finish([NSError errorWithDomain:AltServerErrorDomain code:ALTServerErrorConnectionFailed userInfo:nil]);
+        }
+        
+        // Sending the command successfully doesn't mean the command itself succeeded, so we have to read back the result and check for an error.
+        plist_t result = NULL;
+        if (house_arrest_get_result(houseArrest, &result) != HOUSE_ARREST_E_SUCCESS)
+        {
+            return finish([NSError errorWithDomain:AltServerErrorDomain code:ALTServerErrorConnectionFailed userInfo:nil]);
+        }
+        
+        plist_t errorNode = plist_dict_get_item(result, "Error");
+        if (errorNode != NULL)
+        {
+            char *errorDescription = NULL;
+            plist_get_string_val(errorNode, &errorDescription);
+            
+            NSLog(@"Failed to vend container for %@. %@", bundleIdentifier, @(errorDescription ?: ""));
+            
+            free(errorDescription);
+            plist_free(result);
+            
+            return finish([NSError errorWithDomain:AltServerErrorDomain code:ALTServerErrorConnectionFailed userInfo:nil]);
+        }
+        
+        plist_free(result);
+        
+        /* Connect to AFC service */
+        if (afc_client_new_from_house_arrest_client(houseArrest, &afc) != AFC_E_SUCCESS)
+        {
+            return finish([NSError errorWithDomain:AltServerErrorDomain code:ALTServerErrorConnectionFailed userInfo:nil]);
+        }
+        
+        NSError *error = nil;
+        if (![self writeData:data toDestinationURL:[NSURL fileURLWithPath:path] client:afc error:&error])
+        {
+            return finish(error);
+        }
+        
+        finish(nil);
     });
 }
 

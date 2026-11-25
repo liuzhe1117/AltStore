@@ -14,6 +14,7 @@ import OSLog
 private extension URL
 {
     static let appleGSALookup = URL(string: "https://gsa.apple.com/grandslam/GsService2/lookup")!
+    static let anisetteServers = URL(string: "https://cdn.altstore.io/file/altstore/altstore/remote-altservers.json")!
 }
 
 // Never forward anisette credentials or provisioning data through redirects.
@@ -58,14 +59,9 @@ struct RemoteAnisetteData: Sendable
 // Stable identity for the remote anisette "device": 16 random bytes, plus the adi.pb
 // provisioning blob issued for that identity. Both are persisted so Apple sees the same
 // machine across launches (otherwise every install would trigger a fresh 2FA prompt).
-private struct AnisetteIdentity: Codable
+private struct AnisetteIdentity
 {
-    var schemaVersion: Int
     var bytes: Data
-    var adiPB: Data?
-    var serverURL: URL?
-    var clientInfo: String?
-    var userAgent: String?
 
     var identifier: String { self.bytes.base64EncodedString() }
     var localUserID: String { SHA256.hash(data: self.bytes).map { String(format: "%02x", $0) }.joined() }
@@ -74,74 +70,28 @@ private struct AnisetteIdentity: Codable
     static func make() -> AnisetteIdentity
     {
         let bytes = Data((0..<16).map { _ in UInt8.random(in: .min ... .max) })
-        return AnisetteIdentity(schemaVersion: 2, bytes: bytes, adiPB: nil, serverURL: nil, clientInfo: nil, userAgent: nil)
-    }
-}
-
-private struct AnisetteIdentityStore
-{
-    // Keep identities for this provider separate from the old Windows-only build.
-    // A provider switch must not reuse an adi.pb provisioned for another client.
-    let fileURL = FileManager.default.altserverDirectory.appendingPathComponent("RemoteAnisette/identity.json")
-
-    func load() -> AnisetteIdentity?
-    {
-        guard FileManager.default.fileExists(atPath: self.fileURL.path) else { return nil }
-
-        do
-        {
-            let data = try Data(contentsOf: self.fileURL)
-            let identity = try JSONDecoder().decode(AnisetteIdentity.self, from: data)
-            guard identity.schemaVersion == 2, identity.bytes.count == 16 else { return nil }
-            return identity
-        }
-        catch
-        {
-            Logger.main.error("Ignoring unreadable remote anisette identity.")
-            return nil
-        }
-    }
-
-    func save(_ identity: AnisetteIdentity) throws
-    {
-        try FileManager.default.createDirectory(at: self.fileURL.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-
-        let data = try JSONEncoder().encode(identity)
-        try data.write(to: self.fileURL, options: .atomic)
-
-        // adi.pb is effectively a device credential, so keep it owner-readable only.
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: self.fileURL.path)
+        return AnisetteIdentity(bytes: bytes)
     }
 }
 
 // Fetches anisette data from a remote anisette server using the v3 protocol.
 //
-// Used only on macOS 27+, replacing its AnisetteKit path. Older versions keep
-// the native AOSKit/Mail path. The v3 protocol mirrors AltStore's on-device client.
-@available(macOS 27, *)
+// macOS 26 and later gate AOSKit's anisette generation behind private entitlements, so AltServer
+// can no longer produce a machine ID itself. This is the same fallback AltStore uses on-device
+// (see AltStore/Operations/FetchAnisetteDataOperation.swift) and mirrors SideStore's client.
+@available(macOS 13, *)
 actor RemoteAnisetteDataFetcher
 {
     static let shared = RemoteAnisetteDataFetcher()
-
-    // Follow iLoader's current order: Mac providers first, then the Windows
-    // providers from PR #1835 as fallbacks.
-    private static let defaultServerURLs: [URL] = [
-        URL(string: "https://new.ani.sidestore.io")!,
-        URL(string: "https://mac-ani.jkcoxson.com")!,
-        URL(string: "https://ani.jkcoxson.com")!,
-        URL(string: "https://ani2.stikstore.app")!,
-        URL(string: "https://ani3.stikstore.app")!,
-    ]
 
     private static let timeout: TimeInterval = 90
     private static let placeholderSerialNumber = "C02LKHBBFD57"
 
     private let session: URLSession
     private let sessionDelegate = AnisetteSessionDelegate()
-    private let store = AnisetteIdentityStore()
 
     // Concurrent requests (e.g. several AltStore refreshes at once) share one in-flight fetch,
-    // which also prevents two provisioning sessions from racing to write the identity file.
+    // which also prevents two provisioning sessions from racing to write the identity.
     private var currentTask: Task<RemoteAnisetteData, Error>?
 
     private init()
@@ -173,11 +123,21 @@ actor RemoteAnisetteDataFetcher
 
     func resync(sim: String) async throws -> RemoteAnisetteData
     {
-        guard let identity = self.store.load(), let serverURL = identity.serverURL else {
-            throw AnisetteError.provisioningFailed(debugDescription: "No remote anisette identity to resynchronize.")
-        }
+        guard let serverURL = UserDefaults.standard.anisetteServerURLOverride ?? UserDefaults.standard.preferredAnisetteServerURL,
+              let identityKey = Keychain.shared.anisetteIdentityKey, identityKey.count == 16,
+              let adiPB = Keychain.shared.anisetteADIPB
+        else { throw AnisetteError.provisioningFailed(debugDescription: "No anisette identity to resynchronize.") }
+
+        let identity = AnisetteIdentity(bytes: identityKey)
+
         let (clientInfo, userAgent) = try await self.fetchClientInfo(from: serverURL)
-        let headers = try await self.fetchHeaders(from: serverURL, identity: identity, sim: sim)
+        guard Keychain.shared.anisetteProvisioningClientInfo == clientInfo,
+              Keychain.shared.anisetteProvisioningServerURL == serverURL.absoluteString,
+              Keychain.shared.anisetteProvisioningUserAgent == userAgent else {
+            throw AnisetteError.provisioningFailed(debugDescription: "The anisette server no longer matches the one that provisioned this identity.")
+        }
+
+        let headers = try await self.fetchHeaders(from: serverURL, identity: identity, adiPB: adiPB, sim: sim)
         guard case .headers(let machineID, let oneTimePassword, let routingInfo) = headers else {
             throw AnisetteError.remoteServerInvalidResponse(serverURL: serverURL)
         }
@@ -189,75 +149,137 @@ actor RemoteAnisetteDataFetcher
     }
 }
 
-@available(macOS 27, *)
+@available(macOS 13, *)
 private extension RemoteAnisetteDataFetcher
 {
     func fetchAnisetteDataFromAvailableServer() async throws -> RemoteAnisetteData
     {
-        let configuredURL = UserDefaults.standard.string(forKey: "AnisetteServerURL").flatMap { URL(string: $0) }
-        let serverURLs = configuredURL.map { [$0] } ?? Self.defaultServerURLs
-        var lastError: Error?
-
-        for serverURL in serverURLs
+        if let overrideURL = UserDefaults.standard.anisetteServerURLOverride
         {
-            guard serverURL.scheme == "https", serverURL.host != nil,
-                  serverURL.user == nil, serverURL.password == nil,
-                  serverURL.query == nil, serverURL.fragment == nil,
-                  serverURL.port == nil || serverURL.port == 443
-            else {
-                lastError = AnisetteError.remoteServerInvalidResponse(serverURL: serverURL)
-                continue
-            }
-
+            return try await self.fetchAnisetteData(from: overrideURL)
+        }
+        
+        var failedURL: URL?
+        
+        if let preferredURL = UserDefaults.standard.preferredAnisetteServerURL
+        {
             do
             {
-                return try await self.fetchAnisetteData(from: serverURL)
+                return try await self.fetchAnisetteData(from: preferredURL)
             }
             catch
             {
-                lastError = error
-                Logger.main.error("Remote anisette server \(serverURL.host ?? "?", privacy: .public) failed; trying the next configured server.")
+                Logger.main.error("Preferred anisette server \(preferredURL.absoluteString, privacy: .public) failed, choosing another one. \(error.localizedDescription, privacy: .public)")
+
+                UserDefaults.standard.preferredAnisetteServerURL = nil
+                Keychain.shared.resetAnisetteIdentity()
+
+                failedURL = preferredURL
             }
         }
+        
+        let servers = try await self.fetchServers()
+        let preferredHosts = ["new.ani.sidestore.io", "mac-ani.jkcoxson.com"]
+        let orderedServers = servers.sorted {
+            (preferredHosts.firstIndex(of: $0.url.host ?? "") ?? preferredHosts.count) <
+            (preferredHosts.firstIndex(of: $1.url.host ?? "") ?? preferredHosts.count)
+        }
 
-        throw lastError ?? AnisetteError.remoteServerUnavailable()
+        for server in orderedServers where server.url != failedURL
+        {
+            do
+            {
+                let anisetteData = try await self.fetchAnisetteData(from: server.url)
+                UserDefaults.standard.preferredAnisetteServerURL = server.url
+                return anisetteData
+            }
+            catch
+            {
+                Logger.main.error("Anisette server \(server.name, privacy: .public) failed: \(error.localizedDescription, privacy: .public). Trying next.")
+            }
+        }
+        
+        Logger.main.error("All remote anisette servers failed.")
+        throw AnisetteError.remoteServerUnavailable()
+    }
+
+    func fetchServers() async throws -> [AnisetteServer]
+    {
+        struct Response: Decodable
+        {
+            var servers: [AnisetteServer]
+        }
+
+        do
+        {
+            let response: Response = try await self.send(URLRequest(url: .anisetteServers), decoder: JSONDecoder(), anisetteServerURL: nil)
+            return response.servers
+        }
+        catch
+        {
+            Logger.main.error("Failed to fetch anisette server list. \(error.localizedDescription, privacy: .public)")
+            throw AnisetteError.remoteServerUnavailable(underlyingError: error)
+        }
     }
 
     func fetchAnisetteData(from serverURL: URL) async throws -> RemoteAnisetteData
     {
+        guard serverURL.scheme == "https", serverURL.host != nil,
+              serverURL.user == nil, serverURL.password == nil,
+              serverURL.query == nil, serverURL.fragment == nil,
+              serverURL.port == nil || serverURL.port == 443
+        else { throw AnisetteError.remoteServerInvalidResponse(serverURL: serverURL) }
+
         // 1. Fetch client_info from the server.
         let (clientInfo, userAgent) = try await self.fetchClientInfo(from: serverURL)
 
-        // 2. Load or generate the persisted identity.
-        var identity = self.store.load() ?? .make()
+        // 2. Reuse the provisioned identity, unless it was provisioned against different client info.
+        var identity: AnisetteIdentity
+        var adiPB: Data
 
-        // 3. Provision against this server if we don't have an adi.pb from it.
-        if identity.adiPB == nil || identity.serverURL != serverURL || identity.clientInfo != clientInfo || identity.userAgent != userAgent
+        if let identityKey = Keychain.shared.anisetteIdentityKey, identityKey.count == 16,
+           let cachedADIPB = Keychain.shared.anisetteADIPB,
+           Keychain.shared.anisetteProvisioningClientInfo == clientInfo,
+           Keychain.shared.anisetteProvisioningServerURL == serverURL.absoluteString,
+           Keychain.shared.anisetteProvisioningUserAgent == userAgent
         {
-            Logger.main.notice("No cached adi.pb for \(serverURL.absoluteString, privacy: .public); running anisette provisioning.")
+            identity = AnisetteIdentity(bytes: identityKey)
+            adiPB = cachedADIPB
+        }
+        else
+        {
+            // 3. Otherwise, provision a fresh identity against this server.
+            Logger.main.notice("No up-to-date cached adi.pb; running anisette provisioning against \(serverURL.absoluteString, privacy: .public).")
 
-            identity.adiPB = try await self.provision(against: serverURL, clientInfo: clientInfo, userAgent: userAgent, identity: identity)
-            identity.serverURL = serverURL
-            identity.clientInfo = clientInfo
-            identity.userAgent = userAgent
-            try self.store.save(identity)
+            identity = .make()
+            adiPB = try await self.provision(against: serverURL, clientInfo: clientInfo, userAgent: userAgent, identity: identity)
+
+            Keychain.shared.anisetteADIPB = nil
+            Keychain.shared.anisetteIdentityKey = identity.bytes
+            Keychain.shared.anisetteProvisioningClientInfo = clientInfo
+            Keychain.shared.anisetteProvisioningServerURL = serverURL.absoluteString
+            Keychain.shared.anisetteProvisioningUserAgent = userAgent
+            Keychain.shared.anisetteADIPB = adiPB
         }
 
         // 4. Fetch anisette headers, re-provisioning once if the server rejects our adi.pb.
-        var headers = try await self.fetchHeaders(from: serverURL, identity: identity)
+        var headers = try await self.fetchHeaders(from: serverURL, identity: identity, adiPB: adiPB)
 
         if case .rejected(let message) = headers, message?.contains("-45061") == true
         {
-            Logger.main.notice("Remote anisette provisioning expired; creating one fresh identity.")
+            Logger.main.notice("Anisette provisioning expired; creating one fresh identity.")
+
             identity = .make()
+            adiPB = try await self.provision(against: serverURL, clientInfo: clientInfo, userAgent: userAgent, identity: identity)
 
-            identity.adiPB = try await self.provision(against: serverURL, clientInfo: clientInfo, userAgent: userAgent, identity: identity)
-            identity.serverURL = serverURL
-            identity.clientInfo = clientInfo
-            identity.userAgent = userAgent
-            try self.store.save(identity)
+            Keychain.shared.anisetteADIPB = nil
+            Keychain.shared.anisetteIdentityKey = identity.bytes
+            Keychain.shared.anisetteProvisioningClientInfo = clientInfo
+            Keychain.shared.anisetteProvisioningServerURL = serverURL.absoluteString
+            Keychain.shared.anisetteProvisioningUserAgent = userAgent
+            Keychain.shared.anisetteADIPB = adiPB
 
-            headers = try await self.fetchHeaders(from: serverURL, identity: identity)
+            headers = try await self.fetchHeaders(from: serverURL, identity: identity, adiPB: adiPB)
         }
 
         guard case .headers(let machineID, let oneTimePassword, let routingInfo) = headers else {
@@ -290,10 +312,9 @@ private extension RemoteAnisetteDataFetcher
         let clientInfoURL = serverURL.appending(components: "v3", "client_info")
         let response: Response = try await self.send(URLRequest(url: clientInfoURL), decoder: decoder, anisetteServerURL: serverURL)
 
-        guard response.clientInfo.contains("<"),
-              !response.clientInfo.contains("\r"), !response.clientInfo.contains("\n"),
+        guard !response.clientInfo.isEmpty, !response.clientInfo.contains("\r"), !response.clientInfo.contains("\n"),
               !response.userAgent.isEmpty, !response.userAgent.contains("\r"), !response.userAgent.contains("\n")
-        else { throw AnisetteError.remoteServerInvalidResponse(serverURL: serverURL, debugDescription: "The server must supply a valid client_info and user_agent.") }
+        else { throw AnisetteError.remoteServerInvalidResponse(serverURL: serverURL, debugDescription: "The server must supply a client_info and a user_agent.") }
         return (response.clientInfo, response.userAgent)
     }
 
@@ -303,10 +324,8 @@ private extension RemoteAnisetteDataFetcher
         case rejected(message: String?)
     }
 
-    func fetchHeaders(from serverURL: URL, identity: AnisetteIdentity, sim: String? = nil) async throws -> HeadersResult
+    func fetchHeaders(from serverURL: URL, identity: AnisetteIdentity, adiPB: Data, sim: String? = nil) async throws -> HeadersResult
     {
-        guard let adiPB = identity.adiPB else { throw AnisetteError.provisioningFailed(debugDescription: "Missing adi.pb.") }
-
         struct Body: Encodable
         {
             var identifier: String
@@ -337,10 +356,8 @@ private extension RemoteAnisetteDataFetcher
         var request = URLRequest(url: serverURL.appending(components: "v3", "get_headers"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(Body(identifier: identity.identifier, adi_pb: adiPB.base64EncodedString(), sim: sim, device_id: sim == nil ? nil : identity.deviceID, md_lu: sim == nil ? nil : identity.localUserID))
+        request.httpBody = try JSONEncoder().encode(Body(identifier: identity.identifier, adi_pb: String(decoding: adiPB, as: UTF8.self), sim: sim, device_id: sim == nil ? nil : identity.deviceID, md_lu: sim == nil ? nil : identity.localUserID))
 
-        // The v3 server uses HTTP 400 for a valid GetHeadersError response
-        // such as -45061, which must be decoded so the caller can reprovision.
         let response: Response = try await self.send(request, decoder: JSONDecoder(), anisetteServerURL: serverURL, allowsErrorStatus: true)
 
         guard response.result != "GetHeadersError" else {
@@ -379,7 +396,7 @@ private extension RemoteAnisetteDataFetcher
             }
         }
 
-        let lookupRequest = self.makeAppleRequest(for: .appleGSALookup, clientInfo: "<Mac15,7> <macOS;27.0;26A5378j> <com.apple.AuthKit/1 (com.apple.akd/1.0)>", userAgent: userAgent, identity: identity)
+        let lookupRequest = self.makeAppleRequest(for: .appleGSALookup, clientInfo: clientInfo, userAgent: userAgent, identity: identity)
         let lookupResponse: LookupResponse = try await self.send(lookupRequest, decoder: PropertyListDecoder(), anisetteServerURL: nil)
 
         guard let startProvisioningURL = URL(string: lookupResponse.urls.midStartProvisioning),
@@ -505,14 +522,13 @@ private extension RemoteAnisetteDataFetcher
                 try await sendJSON(EndMessage(ptm: endResponse.Response.ptm, tk: endResponse.Response.tk))
 
             case "ProvisioningSuccess":
-                guard let adiPB = message.adi_pb,
-                      let decodedAdiPB = Data(base64Encoded: adiPB), !decodedAdiPB.isEmpty else {
+                guard let adiPB = message.adi_pb, Data(base64Encoded: adiPB) != nil else {
                     Logger.main.error("ProvisioningSuccess message didn't include adi_pb.")
                     throw AnisetteError.remoteServerInvalidResponse(serverURL: serverURL)
                 }
 
                 Logger.main.notice("Anisette provisioning succeeded.")
-                return decodedAdiPB
+                return Data(adiPB.utf8)
 
             default:
                 // Unknown results are fatal: we don't know whether it's safe to keep going.
@@ -523,7 +539,7 @@ private extension RemoteAnisetteDataFetcher
     }
 }
 
-@available(macOS 27, *)
+@available(macOS 13, *)
 private extension RemoteAnisetteDataFetcher
 {
     func send<T: Decodable, Decoder: TopLevelDecoder>(_ request: URLRequest, decoder: Decoder, anisetteServerURL: URL?, allowsErrorStatus: Bool = false) async throws -> T where Decoder.Input == Data
@@ -540,7 +556,8 @@ private extension RemoteAnisetteDataFetcher
             throw AnisetteError.remoteServerUnavailable(serverURL: anisetteServerURL, underlyingError: error)
         }
 
-        if let httpResponse = urlResponse as? HTTPURLResponse, httpResponse.statusCode != 200 && !allowsErrorStatus
+        if let httpResponse = urlResponse as? HTTPURLResponse, httpResponse.statusCode != 200,
+           !(allowsErrorStatus && httpResponse.statusCode == 400)
         {
             Logger.main.error("Request to \(request.url?.absoluteString ?? "?", privacy: .public) failed with status \(httpResponse.statusCode).")
 

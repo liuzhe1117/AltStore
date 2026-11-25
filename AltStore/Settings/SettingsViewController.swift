@@ -28,6 +28,7 @@ extension SettingsViewController
         case remoteAltServer
         case codeSigning
         case techyThings
+        case experimental
         case credits
         case macDirtyCow
         case debug
@@ -102,6 +103,7 @@ class SettingsViewController: UITableViewController
     @IBOutlet private var enforceThreeAppLimitSwitch: UISwitch!
     @IBOutlet private var disableResponseCachingSwitch: UISwitch!
     @IBOutlet private var prefersRemoteAltServerSwitch: UISwitch!
+    @IBOutlet private var randomizeBundleIDsSwitch: UISwitch!
     
     @IBOutlet private var mastodonButton: UIButton!
     @IBOutlet private var threadsButton: UIButton!
@@ -256,6 +258,7 @@ private extension SettingsViewController
         self.enforceThreeAppLimitSwitch.isOn = !UserDefaults.standard.ignoreActiveAppsLimit
         self.disableResponseCachingSwitch.isOn = UserDefaults.standard.responseCachingDisabled
         self.prefersRemoteAltServerSwitch.isOn = UserDefaults.shared.prefersRemoteAltServer
+        self.randomizeBundleIDsSwitch.isOn = UserDefaults.shared.isBundleIDRandomizationEnabled
         
         self.isRemoteAltServerConfigured = (Keychain.shared.devicePairingFile != nil)
         
@@ -390,6 +393,15 @@ private extension SettingsViewController
                 settingsHeaderFooterView.secondaryLabel.text = NSLocalizedString("If you've removed the 3-sideloaded app limit via the MacDirtyCow exploit, disable this setting to sideload more than 3 apps at a time.", comment: "")
             }
             
+        case .experimental:
+            if isHeader
+            {
+                settingsHeaderFooterView.primaryLabel.text = NSLocalizedString("EXPERIMENTAL", comment: "")
+            }
+            else
+            {
+                settingsHeaderFooterView.secondaryLabel.text = NSLocalizedString("When enabled, newly installed apps are registered with Apple under randomized identifiers.", comment: "")
+            }
         case .debug:
             settingsHeaderFooterView.primaryLabel.text = NSLocalizedString("DEBUG", comment: "")
         }
@@ -508,6 +520,11 @@ private extension SettingsViewController
         UserDefaults.shared.prefersRemoteAltServer = sender.isOn
     }
     
+    @IBAction func toggleIsBundleIDRandomizationEnabled(_ sender: UISwitch)
+    {
+        UserDefaults.shared.isBundleIDRandomizationEnabled = sender.isOn
+    }
+    
     @IBAction func addRefreshAppsShortcut()
     {
         guard let shortcut = INShortcut(intent: INInteraction.refreshAllApps().intent) else { return }
@@ -621,27 +638,19 @@ private extension SettingsViewController
 
     func setUpRemoteAltServer()
     {
-        if #unavailable(iOS 27)
-        {
-            // The setup requires sign-in: pairing needs an account, and the bundled pairing file can't be decrypted without one.
-            guard self.activeTeam != nil else { return self.signIn { result in
-                if case .success = result { self.setUpRemoteAltServer() }
-            } }
-        }
-        
-        if Keychain.shared.devicePairingFile == nil,
-           !UserDefaults.shared.ignoresBundledPairingFile,
-           let pairingFile = AppManager.shared.bundledPairingFile()
-        {
-            Keychain.shared.devicePairingFile = pairingFile // Promote bundled pairing file on first setup only.
-        }
-        
         if let selectedIndexPath = self.tableView.indexPathForSelectedRow
         {
             self.tableView.deselectRow(at: selectedIndexPath, animated: true)
         }
         
         let hostingController = RemoteAltServerSetupView.makeViewController {
+            // Move the pairing file embedded at install to the keychain.
+            if let pairingFile = AppManager.shared.embeddedPairingFile()
+            {
+                Keychain.shared.devicePairingFile = pairingFile.data
+                AppManager.shared.deleteEmbeddedPairingFile()
+            }
+            
             UserDefaults.shared.prefersRemoteAltServer = true
             
             // Selects a default server and provisions adi.pb against it
@@ -920,7 +929,7 @@ extension SettingsViewController
         case _ where isSectionHidden(section): return nil
         case .signIn where self.activeTeam != nil: return nil
         case .account where self.activeTeam == nil: return nil
-        case .signIn, .account, .patreon, .display, .appRefresh, .codeSigning, .remoteAltServer, .techyThings, .credits, .macDirtyCow, .debug:
+        case .signIn, .account, .patreon, .display, .appRefresh, .codeSigning, .remoteAltServer, .techyThings, .credits, .macDirtyCow, .experimental, .debug:
             let headerView = tableView.dequeueReusableHeaderFooterView(withIdentifier: "HeaderFooterView") as! SettingsHeaderFooterView
             self.prepare(headerView, for: section, isHeader: true)
             return headerView
@@ -936,7 +945,7 @@ extension SettingsViewController
         {
         case _ where isSectionHidden(section): return nil
         case .signIn where self.activeTeam != nil: return nil
-        case .signIn, .patreon, .display, .appRefresh, .codeSigning, .remoteAltServer, .techyThings, .macDirtyCow:
+        case .signIn, .patreon, .display, .appRefresh, .codeSigning, .remoteAltServer, .techyThings, .macDirtyCow, .experimental:
             let footerView = tableView.dequeueReusableHeaderFooterView(withIdentifier: "HeaderFooterView") as! SettingsHeaderFooterView
             self.prepare(footerView, for: section, isHeader: false)
             return footerView
@@ -953,7 +962,7 @@ extension SettingsViewController
         case _ where isSectionHidden(section): return 1.0
         case .signIn where self.activeTeam != nil: return 1.0
         case .account where self.activeTeam == nil: return 1.0
-        case .signIn, .account, .patreon, .display, .appRefresh, .codeSigning, .remoteAltServer, .techyThings, .credits, .macDirtyCow, .debug:
+        case .signIn, .account, .patreon, .display, .appRefresh, .codeSigning, .remoteAltServer, .techyThings, .credits, .macDirtyCow, .experimental, .debug:
             let height = self.preferredHeight(for: self.prototypeHeaderFooterView, in: section, isHeader: true)
             return height
             
@@ -969,7 +978,7 @@ extension SettingsViewController
         case _ where isSectionHidden(section): return 1.0
         case .signIn where self.activeTeam != nil: return 1.0
         case .account where self.activeTeam == nil: return 1.0            
-        case .signIn, .patreon, .display, .appRefresh, .codeSigning, .remoteAltServer, .techyThings, .macDirtyCow:
+        case .signIn, .patreon, .display, .appRefresh, .codeSigning, .remoteAltServer, .techyThings, .macDirtyCow, .experimental:
             let height = self.preferredHeight(for: self.prototypeHeaderFooterView, in: section, isHeader: false)
             return height
             
@@ -1072,7 +1081,7 @@ extension SettingsViewController
             case .refreshAttempts, .responseCaching: break
             }
             
-        case .account, .patreon, .display, .instructions, .macDirtyCow: break
+        case .account, .patreon, .display, .instructions, .macDirtyCow, .experimental: break
         }
     }
 }

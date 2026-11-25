@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import CryptoKit
 
 import AltStoreCore
 import AltSign
@@ -51,7 +52,7 @@ class FetchProvisioningProfilesOperation: ResultOperation<[String: ALTProvisioni
         
         self.progress.totalUnitCount = Int64(1 + app.appExtensions.count)
         
-        self.prepareProvisioningProfile(for: app, parentApp: nil, team: team, session: session) { (result) in
+        self.prepareProvisioningProfile(for: app, parentApp: nil, resignedParentBundleID: nil, team: team, session: session) { (result) in
             do
             {
                 self.progress.completedUnitCount += 1
@@ -67,7 +68,7 @@ class FetchProvisioningProfilesOperation: ResultOperation<[String: ALTProvisioni
                 {
                     dispatchGroup.enter()
                     
-                    self.prepareProvisioningProfile(for: appExtension, parentApp: app, team: team, session: session) { (result) in
+                    self.prepareProvisioningProfile(for: appExtension, parentApp: app, resignedParentBundleID: profile.bundleIdentifier, team: team, session: session) { (result) in
                         switch result
                         {
                         case .failure(let e): error = e
@@ -119,7 +120,7 @@ class FetchProvisioningProfilesOperation: ResultOperation<[String: ALTProvisioni
 
 extension FetchProvisioningProfilesOperation
 {
-    func prepareProvisioningProfile(for app: ALTApplication, parentApp: ALTApplication?, team: ALTTeam, session: ALTAppleAPISession, completionHandler: @escaping (Result<ALTProvisioningProfile, Error>) -> Void)
+    func prepareProvisioningProfile(for app: ALTApplication, parentApp: ALTApplication?, resignedParentBundleID: String?, team: ALTTeam, session: ALTAppleAPISession, completionHandler: @escaping (Result<ALTProvisioningProfile, Error>) -> Void)
     {
         DatabaseManager.shared.persistentContainer.performBackgroundTask { (context) in
             
@@ -166,6 +167,7 @@ extension FetchProvisioningProfilesOperation
                 preferredBundleID = nil
             }
             
+            let parentBundleID = parentApp?.bundleIdentifier ?? app.bundleIdentifier
             let bundleID: String
             
             if let preferredBundleID = preferredBundleID
@@ -177,13 +179,25 @@ extension FetchProvisioningProfilesOperation
                 // This app isn't already installed, so create the resigned bundle identifier ourselves.
                 // Or, if the app _is_ installed but with a different team, we need to create a new
                 // bundle identifier anyway to prevent collisions with the previous team.
-                let parentBundleID = parentApp?.bundleIdentifier ?? app.bundleIdentifier
                 let updatedParentBundleID: String
                 
-                if app.isAltStoreApp
+                if let resignedParentBundleID
+                {
+                    // App extensions must be prefixed with their parent app's exact resigned bundle ID.
+                    // The parent may have been installed under different settings, so recalculating its ID now might not match.
+                    updatedParentBundleID = resignedParentBundleID
+                }
+                else if app.isAltStoreApp
                 {
                     // Use legacy bundle ID format for AltStore (and its extensions).
                     updatedParentBundleID = "com.\(team.identifier).\(parentBundleID)"
+                }
+                else if UserDefaults.shared.isBundleIDRandomizationEnabled
+                {
+                    // Hash the original bundle ID so Apple only receives a randomized identifier, shaped like a normal bundle ID.
+                    let hash = SHA256.hash(data: Data((parentBundleID + "." + team.identifier).utf8))
+                    let hex = hash.prefix(6).map { String(format: "%02x", $0) }.joined()
+                    updatedParentBundleID = "com.\(hex).\(team.identifier)"
                 }
                 else
                 {

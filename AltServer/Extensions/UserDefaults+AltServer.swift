@@ -28,6 +28,15 @@ extension UserDefaults
         }
     }
     
+    var preferredAnisetteServerURL: URL? {
+        get {
+            return self.string(forKey: "preferredAnisetteServerURL").flatMap { URL(string: $0) }
+        }
+        set {
+            self.set(newValue?.absoluteString, forKey: "preferredAnisetteServerURL")
+        }
+    }
+
     var didPresentInitialNotification: Bool {
         get {
             return self.bool(forKey: "didPresentInitialNotification")
@@ -50,11 +59,16 @@ extension UserDefaults
 extension UserDefaults
 {
     private static let altJITTimeoutKey = "JITTimeout"
+    private static let anisetteServerURLKey = "RemoteAltServerURL"
     
     var altJITTimeout: TimeInterval? {
         let timeout = self.double(forKey: UserDefaults.altJITTimeoutKey) // Coerces strings into doubles.
         guard timeout != 0 else { return nil }
         
         return timeout
+    }
+    
+    var anisetteServerURLOverride: URL? {
+        return self.string(forKey: UserDefaults.anisetteServerURLKey).flatMap { URL(string: $0) }
     }
 }

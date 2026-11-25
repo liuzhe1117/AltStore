@@ -488,7 +488,7 @@ private extension AuthenticationOperation
                     // No view controller to present security code alert, so don't provide verificationHandler.
                     verificationHandler = nil
                 }
-                    
+                
                 ALTAppleAPI.shared.authenticate(appleID: appleID, password: password, anisetteData: anisetteData,
                                                 verificationHandler: verificationHandler) { (account, session, error) in
                     if let account = account, let session = session

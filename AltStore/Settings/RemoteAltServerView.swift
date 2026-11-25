@@ -235,7 +235,12 @@ private extension RemoteAltServerView
             isShowingError = true
             return
         }
-
+        
+        // Reset cached ADI.pb so we re-generate it upon next connection to server.
+        Keychain.shared.anisetteADIPB = nil
+        Keychain.shared.anisetteIdentityKey = nil
+        Keychain.shared.anisetteProvisioningClientInfo = nil
+        
         UserDefaults.shared.preferredAnisetteServerURL = url
         preferredURL = url
 
@@ -337,14 +342,15 @@ private extension RemoteAltServerView
     func clearRemoteAltServer()
     {
         UserDefaults.shared.prefersRemoteAltServer = false
-        UserDefaults.shared.ignoresBundledPairingFile = true
         Keychain.shared.devicePairingFile = nil
+        AppManager.shared.deleteEmbeddedPairingFile()
         
         UserDefaults.shared.preferredAnisetteServerURL = nil
         Keychain.shared.anisetteADIPB = nil
         Keychain.shared.anisetteADIPBServerURL = nil
         Keychain.shared.anisetteProvisioningClientInfo = nil
         Keychain.shared.anisetteProvisioningUserAgent = nil
+        Keychain.shared.anisetteIdentityKey = nil
         
         dismiss() // Return to Settings
     }

@@ -400,7 +400,7 @@ struct OnDeviceError: ALTLocalizedError
         {
         case .invalidPairingFile, .pairingNotTrusted: return String(localized: "Reset remote AltServer in AltStore’s settings, then set it up again.")
         case .connectionFailed: return String(localized: "Make sure Wi-Fi and LocalDevVPN are both connected, then try again.")
-        case .serviceFailed: return String(localized: "Please try again.")
+        case .serviceFailed: return String(localized: "Try again. If the problem continues, try restarting your device.")
         }
     }
 }

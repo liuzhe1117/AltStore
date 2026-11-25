@@ -12,7 +12,7 @@ import AltStoreCore
 
 private extension URL
 {
-    static let anisetteServers = URL(string: "https://cdn.altstore.io/file/altstore/altstore/anisette-servers.json")!
+    static let anisetteServers = URL(string: "https://cdn.altstore.io/file/altstore/altstore/remote-altservers.json")!
 }
 
 class AnisetteServerManager

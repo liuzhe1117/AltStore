@@ -12,7 +12,6 @@ import UserNotifications
 import MobileCoreServices
 import Intents
 import Combine
-import CryptoKit
 import WidgetKit
 import UniformTypeIdentifiers
 
@@ -98,24 +97,54 @@ class AppManager: ObservableObject
 
 extension AppManager
 {
-    // Returns the pairing file that AltServer bundled into the app. Nil before sign-in because decryption requires the signing certificate.
-    func bundledPairingFile() -> Data?
+    // AltServer embeds a pairing file into our Documents directory during install.
+    private var embeddedPairingFileURL: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("ALTPairingFile.plist")
+    }
+    
+    // Returns the pairing file AltServer provided, if there's a valid one.
+    func embeddedPairingFile() -> PairingFile?
     {
-        guard let encryptedData = try? Data(contentsOf: Bundle.main.pairingFileURL),
-              let machineIdentifier = Keychain.shared.signingCertificatePassword
-        else { return nil }
-        
-        let key = SymmetricKey(data: SHA256.hash(data: machineIdentifier.data(using: .utf8)!)) // Swift strings are always valid UTF-8.
-        
+        let data: Data
         do
         {
-            let sealedBox = try AES.GCM.SealedBox(combined: encryptedData)
-            return try AES.GCM.open(sealedBox, using: key)
+            data = try Data(contentsOf: self.embeddedPairingFileURL)
+        }
+        catch CocoaError.fileReadNoSuchFile
+        {
+            // Missing file is normal: either AltServer didn't provide one, or we already promoted and deleted it.
+            return nil
         }
         catch
         {
-            Logger.sideload.error("Failed to decrypt bundled pairing file. \(error.localizedDescription, privacy: .public)")
+            Logger.sideload.error("Failed to read embedded pairing file. \(error.localizedDescription, privacy: .public)")
             return nil
+        }
+        
+        do
+        {
+            return try PairingFile(data: data)
+        }
+        catch
+        {
+            Logger.sideload.error("Ignoring invalid pairing file from AltServer. \(error.localizedDescription, privacy: .public)")
+            
+            // The file can never become valid, so delete it to keep future setups from re-reading it.
+            self.deleteEmbeddedPairingFile()
+            return nil
+        }
+    }
+    
+    func deleteEmbeddedPairingFile()
+    {
+        do
+        {
+            try FileManager.default.removeItem(at: self.embeddedPairingFileURL)
+        }
+        catch CocoaError.fileNoSuchFile {}
+        catch
+        {
+            Logger.sideload.error("Failed to delete embedded pairing file. \(error.localizedDescription, privacy: .public)")
         }
     }
 

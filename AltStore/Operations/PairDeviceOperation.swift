@@ -123,10 +123,36 @@ class PairDeviceOperation: ResultOperation<Void>, @unchecked Sendable
                 let subtitle = String(localized: "Privacy & Security → Developer Mode")
                 
                 try await BGTaskScheduler.shared.startBackgroundTask(identifier: taskID, title: title, subtitle: subtitle) { task in
+                    // The system kills this task if its progress stalls in the background, so keep reporting progress for as long as we want to wait.
+                    task.progress.totalUnitCount = 300
+                    
+                    let heartbeat = Task<Void, Never> {
+                        do
+                        {
+                            for _ in 0..<300
+                            {
+                                try await Task.sleep(for: .seconds(1))
+                                task.progress.completedUnitCount += 1
+                            }
+                            
+                            // 5 minutes passed without pairing, so stop waiting.
+                            self.finish(.failure(PairError.timedOut()))
+                            self.cancel()
+                        }
+                        catch
+                        {
+                            // Pairing finished or was cancelled before we timed out - nothing to do.
+                        }
+                    }
+                    defer { heartbeat.cancel() }
+                    
                     do
                     {
                         let data = try await self.pairDevice()
                         Keychain.shared.devicePairingFile = data
+                        
+                        heartbeat.cancel()
+                        task.progress.completedUnitCount = task.progress.totalUnitCount
                         
                         task.updateTitle(String(localized: "Pairing Complete"), subtitle: String(localized: "Please return to AltStore."))
                     }
@@ -203,16 +229,12 @@ private extension PairDeviceOperation
         service.publish()
         self.service = service
         
-        // Open Settings app for user's convenience.
-        let settingsRootDeepLink = URL(string: "App-Prefs:")!
-        await MainActor.run { UIApplication.shared.open(settingsRootDeepLink, options: [:]) }
-        
         // Wait for the device to connect, then run the pairing handshake over that connection.
         let connectionFD = try await self.onPairingQueue { try listener.waitForConnection() }
         let data = try await self.performHandshake(handle: handle, connectionFD: connectionFD)
         
         // Validate data is in correct format.
-        _ = try FetchPairingFileOperation.PairingFile(data: data)
+        _ = try PairingFile(data: data)
         
         return data
     }

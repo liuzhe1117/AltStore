@@ -116,40 +116,36 @@ private extension FetchPairingFileOperation
     }
 }
 
-extension FetchPairingFileOperation
+// Device pairing file validated on init: must contain either UDID (lockdown) or private_key (RP-pairing).
+struct PairingFile
 {
-    // Device pairing file validated on init: must contain either UDID (lockdown) or private_key (RP-pairing).
-    struct PairingFile
+    let data: Data
+
+    init(data: Data) throws
     {
-        let data: Data
-
-        init(data: Data) throws
+        struct Contents: Decodable
         {
-            struct Contents: Decodable
-            {
-                var UDID: String?
-                var private_key: Data?
-            }
-
-            let contents: Contents
-            do
-            {
-                contents = try PropertyListDecoder().decode(Contents.self, from: data)
-            }
-            catch
-            {
-                Logger.sideload.error("Failed to decode pairing file. \(error.localizedDescription, privacy: .public)")
-                throw OperationError.invalidPairingFile()
-            }
-
-            guard contents.UDID != nil || contents.private_key != nil else
-            {
-                Logger.sideload.error("Invalid pairing file from AltServer: missing UDID/private_key.")
-                throw OperationError.invalidPairingFile()
-            }
-
-            self.data = data
+            var UDID: String?
+            var private_key: Data?
         }
-    }
 
+        let contents: Contents
+        do
+        {
+            contents = try PropertyListDecoder().decode(Contents.self, from: data)
+        }
+        catch
+        {
+            Logger.sideload.error("Failed to decode pairing file. \(error.localizedDescription, privacy: .public)")
+            throw OperationError.invalidPairingFile()
+        }
+
+        guard contents.UDID != nil || contents.private_key != nil else
+        {
+            Logger.sideload.error("Invalid pairing file: missing UDID/private_key.")
+            throw OperationError.invalidPairingFile()
+        }
+
+        self.data = data
+    }
 }

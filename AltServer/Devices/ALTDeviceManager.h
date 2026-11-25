@@ -46,6 +46,10 @@ extern NSNotificationName const ALTDeviceManagerDeviceDidDisconnectNotification 
 /* Apps */
 - (void)fetchInstalledAppsOnDevice:(ALTDevice *)altDevice completionHandler:(void (^)(NSSet<ALTInstalledApp *> *_Nullable installedApps, NSError *_Nullable error))completionHandler;
 
+/* App Containers */
+- (void)writeData:(NSData *)data toPath:(NSString *)path toDevice:(ALTDevice *)device inContainerForBundleIdentifier:(NSString *)bundleIdentifier
+completionHandler:(void (^)(BOOL success, NSError *_Nullable error))completionHandler;
+
 /* Connections */
 - (void)startWiredConnectionToDevice:(ALTDevice *)device completionHandler:(void (^)(ALTWiredConnection *_Nullable connection, NSError *_Nullable error))completionHandler;
 - (void)startNotificationConnectionToDevice:(ALTDevice *)device completionHandler:(void (^)(ALTNotificationConnection *_Nullable connection, NSError *_Nullable error))completionHandler;

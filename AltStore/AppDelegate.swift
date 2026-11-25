@@ -37,6 +37,8 @@ extension AppDelegate
     static let viewAppDeepLinkStoreAppKey = "storeApp"
     static let searchDeepLinkQueryKey = "query"
     static let exportCertificateCallbackTemplateKey = "callback"
+    
+    static let backgroundRefreshTaskID = Bundle.main.bundleIdentifier! + "." + "Refresh"
 }
 
 @UIApplicationMain
@@ -75,7 +77,24 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         if UserDefaults.standard.firstLaunch == nil
         {
             Keychain.shared.reset()
+            
+            // If AltServer provided a fresh pairing file on install, remove the one left over in the keychain.
+            if AppManager.shared.embeddedPairingFile() != nil
+            {
+                Keychain.shared.devicePairingFile = nil
+            }
+            
             UserDefaults.standard.firstLaunch = Date()
+        }
+                
+        if UserDefaults.shared.didResetAnisetteServer == nil
+        {
+            Keychain.shared.anisetteIdentityKey = nil
+            Keychain.shared.anisetteADIPB = nil
+            Keychain.shared.anisetteProvisioningClientInfo = nil
+            
+            UserDefaults.shared.preferredAnisetteServerURL = nil
+            UserDefaults.shared.didResetAnisetteServer = .now
         }
         
         UserDefaults.standard.preferredServerID = Bundle.main.object(forInfoDictionaryKey: Bundle.Info.serverID) as? String
@@ -284,18 +303,26 @@ extension AppDelegate
         UIApplication.shared.registerForRemoteNotifications()
         #endif
         
+        let isRegistered = BGTaskScheduler.shared.register(forTaskWithIdentifier: AppDelegate.backgroundRefreshTaskID, using: DispatchQueue.main) { task in
+            self.handleBackgroundRefreshTask(task)
+        }
+        
+        if !isRegistered
+        {
+            Logger.main.error("Failed to register background refresh task handler.")
+        }
+        
+        self.scheduleBackgroundRefreshTask()
+    }
+    
+    private func scheduleBackgroundRefreshTask()
+    {
         // iOS used to hang occasionally when submitting background tasks,
         // so run on global dispatch queue just to be safe.
         DispatchQueue.global(qos: .utility).async {
-            let taskID = Bundle.main.bundleIdentifier! + "." + "Refresh"
-            BGTaskScheduler.shared.register(forTaskWithIdentifier: taskID, using: DispatchQueue.main) { task in
-                self.application(UIApplication.shared, performFetchWithCompletionHandler: { (result: UIBackgroundFetchResult) -> Void in
-                    Logger.main.info("Finishing background refreshing with result: \(result.rawValue)")
-                })
-            }
-            
-            let request = BGAppRefreshTaskRequest(identifier: taskID)
-            request.earliestBeginDate = Date(timeIntervalSinceNow: 1 * 60 * 60) // Fetch no earlier than 1 hour from now.
+            let request = BGProcessingTaskRequest(identifier: AppDelegate.backgroundRefreshTaskID)
+            request.earliestBeginDate = Date(timeIntervalSinceNow: 1 * 60 * 60) // Refresh no earlier than 1 hour from now.
+            request.requiresNetworkConnectivity = true
             
             do
             {
@@ -306,6 +333,57 @@ extension AppDelegate
                 Logger.main.error("Failed to schedule background refresh task: \(error.localizedDescription, privacy: .public)")
             }
         }
+    }
+    
+    private func handleBackgroundRefreshTask(_ task: BGTask)
+    {
+        // The request that started this task has been consumed, so submit the next one now to keep refreshes recurring.
+        self.scheduleBackgroundRefreshTask()
+        
+        task.expirationHandler = {
+            Logger.main.error("Background refresh task expired before finishing.")
+            task.setTaskCompleted(success: false)
+        }
+        
+        self.scheduleLaunchReminderNotification()
+        
+        DatabaseManager.shared.start() { (error) in
+            if let error = error
+            {
+                Logger.main.error("Failed to start database for background refresh. \(error.localizedDescription, privacy: .public)")
+                task.setTaskCompleted(success: false)
+                return
+            }
+            
+            self.performBackgroundFetch { (backgroundFetchResult) in
+                Logger.main.info("Finishing background refresh with result: \(backgroundFetchResult.rawValue)")
+            } refreshAppsCompletionHandler: { (refreshAppsResult) in
+                switch refreshAppsResult
+                {
+                case .success: task.setTaskCompleted(success: true)
+                case .failure(let error):
+                    Logger.main.error("Failed to refresh apps in the background. \(error.localizedDescription, privacy: .public)")
+                    task.setTaskCompleted(success: false)
+                }
+            }
+        }
+    }
+    
+    private func scheduleLaunchReminderNotification()
+    {
+        guard UserDefaults.standard.isBackgroundRefreshEnabled && !UserDefaults.standard.presentedLaunchReminderNotification else { return }
+        
+        let threeHours: TimeInterval = 3 * 60 * 60
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: threeHours, repeats: false)
+        
+        let content = UNMutableNotificationContent()
+        content.title = NSLocalizedString("App Refresh Tip", comment: "")
+        content.body = NSLocalizedString("The more you open AltStore, the more chances it's given to refresh apps in the background.", comment: "")
+        
+        let request = UNNotificationRequest(identifier: "background-refresh-reminder", content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request)
+        
+        UserDefaults.standard.presentedLaunchReminderNotification = true
     }
     
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data)
@@ -325,20 +403,9 @@ extension AppDelegate
     
     func application(_ application: UIApplication, performFetchWithCompletionHandler backgroundFetchCompletionHandler: @escaping (UIBackgroundFetchResult) -> Void)
     {
-        if UserDefaults.standard.isBackgroundRefreshEnabled && !UserDefaults.standard.presentedLaunchReminderNotification
-        {
-            let threeHours: TimeInterval = 3 * 60 * 60
-            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: threeHours, repeats: false)
-            
-            let content = UNMutableNotificationContent()
-            content.title = NSLocalizedString("App Refresh Tip", comment: "")
-            content.body = NSLocalizedString("The more you open AltStore, the more chances it's given to refresh apps in the background.", comment: "")
-            
-            let request = UNNotificationRequest(identifier: "background-refresh-reminder5", content: content, trigger: trigger)
-            UNUserNotificationCenter.current().add(request)
-            
-            UserDefaults.standard.presentedLaunchReminderNotification = true
-        }
+        // Only reached from didReceiveRemoteNotification, which is DEBUG-only. Real background refreshes go through handleBackgroundRefreshTask().
+        
+        self.scheduleLaunchReminderNotification()
         
         BackgroundTaskManager.shared.performExtendedBackgroundTask { (taskResult, taskCompletionHandler) in
             if let error = taskResult.error

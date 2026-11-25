@@ -32,7 +32,7 @@ extension RemoteAltServerSetupView
     {
         var plan: [Step] = [.welcome]
         
-        if Keychain.shared.devicePairingFile == nil
+        if Keychain.shared.devicePairingFile == nil && AppManager.shared.embeddedPairingFile() == nil
         {
             if #available(iOS 27, *)
             {
@@ -75,6 +75,9 @@ struct RemoteAltServerSetupView: View
     @Environment(\.dismiss)
     private var dismiss
     
+    @Environment(\.openURL)
+    private var openURL
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -104,7 +107,7 @@ struct RemoteAltServerSetupView: View
             }
             // Incrementing pairingAttempt restarts this task, cancelling any active pairing attempt before starting a new one.
             .task(id: pairingAttempt) {
-                guard pairingAttempt > 0 else { return } // Only pair after a tap.
+                guard pairingAttempt > 0 else { return }
                 await pair()
             }
             .alert("Unable to Pair", isPresented: $isShowingError) {
@@ -257,10 +260,25 @@ private extension RemoteAltServerSetupView
         } accessory: {
             GlassBadge(content: Text("Enter passcode when prompted."), color: Color(.altSecondary))
         } buttons: {
-            PairingButton(state: pairingState, idleTitle: "Start Pairing", waitingTitle: "Waiting to Pair…") {
-                pairingAttempt += 1
+            if pairingState == .waiting
+            {
+                SwiftUI.Button("Open Settings") {
+                    openURL(URL(string: "App-Prefs:")!)
+                }
+            }
+            else
+            {
+                PairingButton(state: pairingState, idleTitle: "Start Pairing", waitingTitle: "Waiting to Pair…") {
+                    pairingAttempt += 1
+                    openURL(URL(string: "App-Prefs:")!)
+                }
             }
         }
+        .onAppear {
+            // Start pairing immediately so 'Pair with AltStore' is visible in Settings.
+            if pairingState == .idle { pairingAttempt += 1 }
+        }
+        .animation(.default, value: pairingState)
     }
     
 // MARK: - Install VPN
