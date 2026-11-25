@@ -1,0 +1,23 @@
+docs/releases/2026-11-25-gsa-503.md
+  s_f708d8a6b93240::t_49765b388287c8 15-16,36-44
+  s_f708d8a6b93240::t_d162d278ea7284 1-14,17-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "15d440e7eab3165078160119bd7223b9657052d5",
+  "prompts": {},
+  "logical_commit_id": "15d440e7eab3165078160119bd7223b9657052d5",
+  "sessions": {
+    "s_f708d8a6b93240": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a210ec-d111-71f0-b703-1d3fff66e581",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuzhe1117 <liuzhe1117@gmail.com>",
+      "total_additions": 46,
+      "total_deletions": 2
+    }
+  }
+}
