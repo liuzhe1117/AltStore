@@ -1,0 +1,72 @@
+AltServer/Extensions/UserDefaults+AltServer.swift
+  s_f708d8a6b93240::t_057e3e3535f3fa 31-39,62,69-72
+AltStore/Settings/RemoteAltServerSetupView.swift
+  s_f708d8a6b93240::t_057e3e3535f3fa 35,78-80,110,263-267,269-279,281
+AltStoreCore/Components/Keychain.swift
+  s_f708d8a6b93240::t_057e3e3535f3fa 90
+"AltStore/Managing Apps/AppManager.swift"
+  s_f708d8a6b93240::t_057e3e3535f3fa 100-106,108-122,126,130-133,135-147
+"AltServer/Anisette Data/AnisetteError.swift"
+  s_f708d8a6b93240::t_057e3e3535f3fa 36,40,44,58,64,88,92,96
+AltServer/Keychain.swift
+  s_f708d8a6b93240::t_301c06c55cb1ca 59-64,74-75
+  s_f708d8a6b93240::t_057e3e3535f3fa 1-58,65-73,76-77
+AltStore/Anisette/AnisetteServerManager.swift
+  s_f708d8a6b93240::t_057e3e3535f3fa 15
+AltStore/Operations/AuthenticationOperation.swift
+  s_f708d8a6b93240::t_057e3e3535f3fa 491
+AltStore/Settings/Settings.storyboard
+  s_f708d8a6b93240::t_057e3e3535f3fa 2,5,23,120,150,182,214,246,282,322,362,375,398,430,552,584,620,645-684,692,736,780,824,864,877,904,937,973,986,1029,1050,1083,1086,1090,1110,1151,1353,1356,1360,1363,1403,1415,1478,1482,1520
+AltStore/Settings/RemoteAltServerView.swift
+  s_f708d8a6b93240::t_057e3e3535f3fa 238-243,346,353
+AltStore/Operations/FetchPairingFileOperation.swift
+  s_f708d8a6b93240::t_057e3e3535f3fa 119-120,122,124-126,128-130,132-141,143-146,149-150
+AltStore.xcodeproj/project.pbxproj
+  s_f708d8a6b93240::t_057e3e3535f3fa 23-25,872-873,1390,1578,2527,2768,3498-3499,4052,4085,4106,4139,4397,4407,4429,4438,4589,4602,4628,4641,4715,4737,4759,4779,4955-4959
+AltStore/Settings/SettingsViewController.swift
+  s_f708d8a6b93240::t_057e3e3535f3fa 31,106,261,396-404,521-525,527,647-653,932,948,965,981,1084
+AltServer/Devices/ALTDeviceManager.h
+  s_f708d8a6b93240::t_057e3e3535f3fa 49-52
+AltStore/Info.plist
+  s_f708d8a6b93240::t_057e3e3535f3fa 14,213
+AltServer/Devices/ALTDeviceManager+Installation.swift
+  s_f708d8a6b93240::t_057e3e3535f3fa 202-220,294-295,298,303-309,313,967
+AltServer/Devices/ALTDeviceManager.mm
+  s_f708d8a6b93240::t_057e3e3535f3fa 30,505,520-541,543-544,552-556,564,574-579,593,1444-1520
+"AltServer/Anisette Data/AnisetteServer.swift"
+  s_f708d8a6b93240::t_057e3e3535f3fa 1-15
+"AltServer/Anisette Data/RemoteAnisetteDataFetcher.swift"
+  s_f708d8a6b93240::t_301c06c55cb1ca 134-136,182-186,188,227-232,242-244,257,260-262,275,278-280,559-560
+  s_f708d8a6b93240::t_057e3e3535f3fa 17,62,73,79-82,94,126-132,137-140,152,157-164,166-177,179-181,189,192-194,198,201-222,236-241,246-247,249-256,258-259,263,266,270-274,276-277,281-282,315,317,327,359,399,525,531,542
+AltStore/AppDelegate.swift
+  s_f708d8a6b93240::t_057e3e3535f3fa 40-41,80-86,89-98,305-319,323-325,334-367,370-386,388,406-408
+"AltStore/Managing Apps/OnDeviceClient.swift"
+  s_f708d8a6b93240::t_057e3e3535f3fa 403
+AltServer/AppDelegate.swift
+  s_f708d8a6b93240::t_057e3e3535f3fa 64-70,73-80
+AltStore/Operations/FetchProvisioningProfilesOperation.swift
+  s_f708d8a6b93240::t_057e3e3535f3fa 10,55,71,123,170,184-190,194-200
+AltStoreCore/Extensions/UserDefaults+AltStore.swift
+  s_f708d8a6b93240::t_057e3e3535f3fa 84,89-90,130
+AltStore/Operations/PairDeviceOperation.swift
+  s_f708d8a6b93240::t_057e3e3535f3fa 126-148,154-156,237
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "c031692cfed013ef54e3608148c8815d7e2b06b6",
+  "prompts": {},
+  "logical_commit_id": "c031692cfed013ef54e3608148c8815d7e2b06b6",
+  "sessions": {
+    "s_f708d8a6b93240": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a210ec-d111-71f0-b703-1d3fff66e581",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuzhe1117 <liuzhe1117@gmail.com>",
+      "total_additions": 1062,
+      "total_deletions": 622
+    }
+  }
+}
