@@ -1,0 +1,21 @@
+docs/releases/2026-11-25-watch-companion.md
+  s_f708d8a6b93240::t_1c79a9a8dfd234 1-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "86366a18c8ed5e942918eea67238c2e72e4840bc",
+  "prompts": {},
+  "logical_commit_id": "86366a18c8ed5e942918eea67238c2e72e4840bc",
+  "sessions": {
+    "s_f708d8a6b93240": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a210ec-d111-71f0-b703-1d3fff66e581",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuzhe1117 <liuzhe1117@gmail.com>",
+      "total_additions": 34
+    }
+  }
+}
