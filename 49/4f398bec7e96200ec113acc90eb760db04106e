@@ -1,0 +1,32 @@
+AltStore.xcodeproj/project.pbxproj
+  s_f708d8a6b93240::t_fed6a3aeb06cb4 347,349,1199,2381,3482,3829
+AltTests/AppGroupInfoPlistTests.swift
+  s_f708d8a6b93240::t_99d76baf586518 1-54
+AltServer/Devices/ALTDeviceManager+Installation.swift
+  s_f708d8a6b93240::t_fed6a3aeb06cb4 1002-1004
+docs/releases/2026-11-25-appgroup-launch.md
+  s_f708d8a6b93240::t_02170f1a10c848 1-35
+Shared/Extensions/AppGroupInfoPlist.swift
+  s_f708d8a6b93240::t_99d76baf586518 1-47
+AltStore/Operations/ResignAppOperation.swift
+  s_f708d8a6b93240::t_fed6a3aeb06cb4 129-131,134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "494f398bec7e96200ec113acc90eb760db04106e",
+  "prompts": {},
+  "logical_commit_id": "494f398bec7e96200ec113acc90eb760db04106e",
+  "sessions": {
+    "s_f708d8a6b93240": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a210ec-d111-71f0-b703-1d3fff66e581",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuzhe1117 <liuzhe1117@gmail.com>",
+      "total_additions": 149,
+      "total_deletions": 8
+    }
+  }
+}
