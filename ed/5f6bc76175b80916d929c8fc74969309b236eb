@@ -1,0 +1,27 @@
+AltTests/run-installation-callback-tests.py
+  s_f708d8a6b93240::t_4384e0409afbcc 1-111
+docs/releases/2026-11-25-installation-callback.md
+  s_f708d8a6b93240::t_34cba7472178c5 1-37
+AltServer/Devices/ALTDeviceManager.mm
+  s_f708d8a6b93240::t_aad8f916e56c8b 447-450,1894
+  s_f708d8a6b93240::t_33aa851e285668 408-417,419-421,423,425-431,433-434,436-446,451-473,1831-1838,1852-1857,1898,1907-1909
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "ed5f6bc76175b80916d929c8fc74969309b236eb",
+  "prompts": {},
+  "logical_commit_id": "ed5f6bc76175b80916d929c8fc74969309b236eb",
+  "sessions": {
+    "s_f708d8a6b93240": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a210ec-d111-71f0-b703-1d3fff66e581",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuzhe1117 <liuzhe1117@gmail.com>",
+      "total_additions": 232,
+      "total_deletions": 26
+    }
+  }
+}
