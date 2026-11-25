@@ -405,28 +405,72 @@ NSNotificationName const ALTDeviceManagerDeviceDidDisconnectNotification = @"ALT
         
         NSProgress *installationProgress = [NSProgress progressWithTotalUnitCount:100 parent:progress pendingUnitCount:1];
         
-        self.installationProgress[UUID] = installationProgress;
-        self.installationCompletionHandlers[UUID] = ^(NSError *error) {
-            finish(error);
-            
-            if (temporaryDirectoryURL != nil)
+        NSLock *completionLock = [[NSLock alloc] init];
+        __block BOOL didComplete = NO;
+        __block NSError *installationError = nil;
+
+        // The C status callback runs on libimobiledevice's receive thread. Only
+        // record its result here; freeing that client from its own callback can
+        // otherwise join the current thread.
+        void (^completeInstallation)(NSError *) = ^(NSError *error) {
+            [completionLock lock];
+            if (!didComplete)
             {
-                NSError *error = nil;
-                if (![[NSFileManager defaultManager] removeItemAtURL:temporaryDirectoryURL error:&error])
-                {
-                    NSLog(@"Error removing temporary directory. %@", error);
-                }
+                didComplete = YES;
+                installationError = error;
+                dispatch_semaphore_signal(semaphore);
             }
-            
-            dispatch_semaphore_signal(semaphore);
+            [completionLock unlock];
         };
-        
+
+        @synchronized (self)
+        {
+            self.installationProgress[UUID] = installationProgress;
+            self.installationCompletionHandlers[UUID] = completeInstallation;
+        }
+
         NSLog(@"Installing to device %@...", udid);
-        
-        instproxy_install(ipc, destinationURL.relativePath.fileSystemRepresentation, options, ALTDeviceManagerUpdateStatus, uuidString);
+
+        instproxy_error_t installationResult = instproxy_install(ipc, destinationURL.relativePath.fileSystemRepresentation, options, ALTDeviceManagerUpdateStatus, uuidString);
         instproxy_client_options_free(options);
-        
-        dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+        if (installationResult != INSTPROXY_E_SUCCESS)
+        {
+            NSLog(@"Installation request failed to start (%d).", installationResult);
+            completeInstallation([NSError errorWithInstallationProxyError:installationResult device:nil]);
+        }
+
+        // A disconnected device can make the receive thread exit without a
+        // terminal callback. Never leave all subsequent installs queued forever.
+        if (dispatch_semaphore_wait(semaphore, dispatch_time(DISPATCH_TIME_NOW, 5 * 60 * NSEC_PER_SEC)) != 0)
+        {
+            NSLog(@"Timed out waiting for the device's installation result.");
+            NSError *timeoutError = [NSError errorWithInstallationProxyError:INSTPROXY_E_RECEIVE_TIMEOUT device:nil];
+            NSMutableDictionary *userInfo = [timeoutError.userInfo mutableCopy];
+            userInfo[NSLocalizedRecoverySuggestionErrorKey] = NSLocalizedString(@"Check whether the app was installed on your device. Reconnect the device and try again if needed.", nil);
+            completeInstallation([NSError errorWithDomain:timeoutError.domain code:timeoutError.code userInfo:userInfo]);
+        }
+
+        @synchronized (self)
+        {
+            self.installationCompletionHandlers[UUID] = nil;
+            self.installationProgress[UUID] = nil;
+        }
+
+        [completionLock lock];
+        NSError *error = installationError;
+        [completionLock unlock];
+
+        // Clean up and notify callers on the installation queue after the C
+        // callback has returned, rather than on its receive thread.
+        finish(error);
+        if (temporaryDirectoryURL != nil)
+        {
+            NSError *cleanupError = nil;
+            if (![[NSFileManager defaultManager] removeItemAtURL:temporaryDirectoryURL error:&cleanupError])
+            {
+                NSLog(@"Error removing temporary directory. %@", cleanupError);
+            }
+        }
     });
         
     return progress;
@@ -1784,7 +1828,14 @@ void ALTDeviceManagerUpdateStatus(plist_t command, plist_t status, void *uuid)
 {
     NSUUID *UUID = [[NSUUID alloc] initWithUUIDString:[NSString stringWithUTF8String:(const char *)uuid]];
     
-    NSProgress *progress = ALTDeviceManager.sharedManager.installationProgress[UUID];
+    ALTDeviceManager *manager = ALTDeviceManager.sharedManager;
+    NSProgress *progress = nil;
+    void (^completionHandler)(NSError *) = nil;
+    @synchronized (manager)
+    {
+        progress = manager.installationProgress[UUID];
+        completionHandler = manager.installationCompletionHandlers[UUID];
+    }
     if (progress == nil)
     {
         return;
@@ -1798,9 +1849,13 @@ void ALTDeviceManagerUpdateStatus(plist_t command, plist_t status, void *uuid)
     uint64_t code = 0;
     instproxy_status_get_error(status, &name, &description, &code);
     
-    if ((percent == -1 && progress.completedUnitCount > 0) || code != 0 || name != NULL)
+    char *statusName = NULL;
+    instproxy_status_get_name(status, &statusName);
+    BOOL isComplete = statusName != NULL && strcmp(statusName, "Complete") == 0;
+    free(statusName);
+
+    if (isComplete || code != 0 || name != NULL)
     {
-        void (^completionHandler)(NSError *) = ALTDeviceManager.sharedManager.installationCompletionHandlers[UUID];
         if (completionHandler != nil)
         {
             NSString *localizedDescription = @(description ?: "");
@@ -1836,11 +1891,11 @@ void ALTDeviceManagerUpdateStatus(plist_t command, plist_t status, void *uuid)
             else
             {
                 NSLog(@"Finished installing app!");
+                progress.completedUnitCount = progress.totalUnitCount;
                 completionHandler(nil);
             }
             
-            ALTDeviceManager.sharedManager.installationCompletionHandlers[UUID] = nil;
-            ALTDeviceManager.sharedManager.installationProgress[UUID] = nil;
+
         }
     }
     else if (progress.completedUnitCount < percent)
@@ -1849,6 +1904,9 @@ void ALTDeviceManagerUpdateStatus(plist_t command, plist_t status, void *uuid)
         
         NSLog(@"Installation Progress: %@", @(percent));
     }
+
+    free(name);
+    free(description);
 }
 
 void ALTDeviceManagerUpdateAppDeletionStatus(plist_t command, plist_t status, void *uuid)
